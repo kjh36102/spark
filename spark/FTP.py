@@ -10,6 +10,7 @@ class FTP:
         self.basepath = '/'
         self.port = 21
         self.encoding = 'utf-8'
+        self.cwd_level = 0
     
     def connect(self):
         self.session.connect(host=self.hostname, port=int(self.port))
@@ -78,82 +79,97 @@ class FTP:
         f_ftp_info.close()
 
         print('[! Your FTP info is saved into ftp_info.yml.]')
+
+    def go_basepath(self):
+        while self.cwd_level > 0: self.cwd('../')
     
+    def cwd(self, dirname):
+        code = self.session.voidcmd('CWD ' + dirname)[:3]
 
-def load_ftp_info(init=False):
-    #ftp_info.yml 있는지 확인하기
-    info_found_state = os.path.isfile('spark/ftp_info.yml')
+        if code != '250': return
 
-    #init일 때
-    
+        if dirname == '../': 
+            if self.cwd_level <= 0: 
+                self.session.voidcmd('CWD ' + self.basepath)
+                self.cwd_level = 0
+                return
 
-    #ftp_info.yml 없으면 사용자로부터 로그인 정보 수집
-    if info_found_state == False or init == True:
-        print("[! Please input your web FTP info. Don't worry. It will not shown to public.]")
-        hostname = input('hostname : ')
-        username = input('username : ')
-        password = input('password : ')
-        basepath = input('basepath (ex=/HDD1/embed): ')
-        port = input('port (default=21) : ')
-        encoding = input('encoding (default=utf-8) : ')
+            self.cwd_level -= 1
+        else:
+            self.cwd_level += 1
 
-        if basepath == '': basepath = '/'
-        if port == '': port = '21'
-        if encoding == '': encoding = 'utf-8'
+    #폴더 생성 함수, 존재하면 스킵함
+    def mkdir(self, target_dir_path, change_dir=False):
+        dir_list = target_dir_path.split('/')[0:-1]
 
-        #파일로 저장할지 물어보기
-        print('[? Do you want to save this in ftp_info.yml? It will not pushed to repository.]')
-        print('  (Only recommend on your PC)')
-        save_flag = input('save? (y/n) >> ')
+        for dir_name in dir_list:
+            try:
+                self.session.mkd(dir_name)
+            except ftplib.error_perm as e:
+                if e.args[0][:3] == '550':
+                    pass
+                else:
+                    print('ftplib.error_perm: ', e)
+            except UnicodeDecodeError as e:
+                pass
 
-        #대답이 y면 저장하기
-        if save_flag == 'y':
-            f_ftp_info = open('spark/ftp_info.yml', 'w')
+            self.session.cwd(dir_name)
 
-            f_ftp_info.write('hostname: ' + hostname + '\n')
-            f_ftp_info.write('username: ' + username + '\n')
-            f_ftp_info.write('password: ' + password + '\n')
+        if change_dir == False: self.session.cwd(self.basepath)
 
-            f_ftp_info.write('basepath: ' + basepath + '\n')
-            f_ftp_info.write('port: ' + port + '\n')
-            f_ftp_info.write('encoding: ' + encoding + '\n')
+        #파일 업로드
+    def upload(self, src_path_list, target_path_list):
+        print('[! Uploading images to FTP Server.]')
 
-            f_ftp_info.close()
+        try:
+            #두 리스트 크기가 같은지 확인
+            if len(src_path_list) != len(target_path_list): raise Exception('Len of src_path_list and target_path_list are not same.')
 
-            print('[! Your FTP info successfully saved into ftp_info.yml.]')
+            for src, target in zip(src_path_list, target_path_list):
+                self.session.cwd(self.basepath)
 
-    #ftp_info.yml 이 존재하면 정보 불러오기
-    print('[! Loading FTP info from ftp_info.yml...]')
-    f_ftp_info = open('spark/ftp_info.yml', 'r')
-    while True:
-        line = f_ftp_info.readline()
-        if not line: break
+                print('Src path: ' + src)
+                print('Target path: ' + target)
 
-        raw_line = line[:-1]
+                #디렉토리 생성
+                self.mkdir(target, change_dir=True)
+                
+                list = os.listdir(src)
 
-        if 'hostname:' in raw_line: hostname = raw_line.split(' ') [1]
-        if 'username:' in raw_line: username = raw_line.split(' ') [1]
-        if 'password:' in raw_line: password = raw_line.split(' ') [1]
-        if 'basepath:' in raw_line: basepath = raw_line.split(' ') [1]
-        if 'port:' in raw_line: port = raw_line.split(' ') [1]
-        if 'encoding:' in raw_line: encoding = raw_line.split(' ') [1]
+                for file in list:
+                    if '.md' in file: continue
 
-    print('\t...Done')
+                    print('\tUploading ' + file + '...', end='')
+                    with open(src + file, 'rb') as f:
+                        self.session.storbinary(f'STOR {file}', f)
+                        print('\t\tDone')
+
+            self.session.cwd(self.basepath)
+            print('[! Successfully uploaded images.]')
+        except Exception as e:
+            print('Error while uploading: ' + e)
+
 
 ftp = FTP()
 ftp.load_info()
 ftp.connect()
 
-file_infos = []
+src_list = []
+target_list = []
 
 while True:
-    cmd = input('>> ')
-    if cmd == 'quit': break
-    elif cmd == 'nlst': print(ftp.session.nlst())
-    elif cmd == 'dir': ftp.session.dir()
-    elif cmd == 'list': 
-        ftp.session.retrlines(cmd, file_infos.append)
-        print('file_infos:', file_infos)
-    else: print(f'  res: {ftp.session.voidcmd(cmd)}')
+    src = input('input file dir >> ')
+
+    if src == 'x': break
+
+    src = src.replace('\\', '/')
+    src += '/'
+
+    target = src[7:]
+
+    src_list.append(src)
+    target_list.append(target)
+
+ftp.upload(src_list, target_list)
 
 ftp.close()
