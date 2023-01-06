@@ -119,7 +119,7 @@ def upload(src_path_list, target_path_list):
                         ftp.storbinary(f'STOR {file}', f)
                         print('\t\tDone')
                     
-                for i in range(cwd_cnt): 
+                for i in range(cwd_cnt): #TODO cwd 명령 리팩토링, 제일앞에 / 를 붙여주면 바로이동 가능
                     ftp.cwd('../')
                 cwd_cnt = 0
 
@@ -130,6 +130,15 @@ def upload(src_path_list, target_path_list):
         print('Error while uploading: ' + e)
     finally:
         ftp.close()
+
+#TODO FTP 서버 내 파일 및 폴더 삭제하는 함수 만들기
+def remove(target_path):
+    #포스트및 포스트 폴더 삭제
+    pass
+
+#TODO _post 폴더 내 파일과 FTP서버 내 파일 동기화하는 함수 만들기
+def synchronize(src_path, target_path):
+    pass
 
 
 src_list = []
