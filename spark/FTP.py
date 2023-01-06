@@ -10,7 +10,6 @@ class FTP:
         self.basepath = '/'
         self.port = 21
         self.encoding = 'utf-8'
-        self.cwd_level = 0
     
     def connect(self):
         self.session.connect(host=self.hostname, port=int(self.port))
@@ -80,24 +79,6 @@ class FTP:
 
         print('[! Your FTP info is saved into ftp_info.yml.]')
 
-    def go_basepath(self):
-        while self.cwd_level > 0: self.cwd('../')
-    
-    def cwd(self, dirname):
-        code = self.session.voidcmd('CWD ' + dirname)[:3]
-
-        if code != '250': return
-
-        if dirname == '../': 
-            if self.cwd_level <= 0: 
-                self.session.voidcmd('CWD ' + self.basepath)
-                self.cwd_level = 0
-                return
-
-            self.cwd_level -= 1
-        else:
-            self.cwd_level += 1
-
     #폴더 생성 함수, 존재하면 스킵함
     def mkdir(self, target_dir_path, change_dir=False):
         dir_list = target_dir_path.split('/')[0:-1]
@@ -117,9 +98,9 @@ class FTP:
 
         if change_dir == False: self.session.cwd(self.basepath)
 
-        #파일 업로드
-    def upload(self, src_path_list, target_path_list):
-        print('[! Uploading images to FTP Server.]')
+        #파일 동기화
+    def synchronize(self, src_path_list, target_path_list):
+        print('[! Synchronize images with FTP Server.]')
 
         try:
             #두 리스트 크기가 같은지 확인
@@ -134,18 +115,60 @@ class FTP:
                 #디렉토리 생성
                 self.mkdir(target, change_dir=True)
                 
-                list = os.listdir(src)
+                #remote_file_sizes 구하기
+                remote_file_infos = []  #4번 파일 사이즈, 8번 파일 이름
+                self.session.retrlines('LIST', remote_file_infos.append)
 
-                for file in list:
+                remote_file_sizes = {}  
+                for raw_str in remote_file_infos:   #remote_file_infos 정제
+                    datas = ' '.join(raw_str.split()).split()
+                    remote_file_sizes[datas[8]] = datas[4]
+
+                print('remote_file_sizes:', remote_file_sizes)
+
+
+                #local_file_sizes 구하기
+                local_file_names = os.listdir(src)
+                local_file_sizes = {}
+                
+                for file in local_file_names:
+                    local_file_sizes[file] = os.path.getsize(src + file)
+
+                print('local_file_sizes:', local_file_sizes)
+
+                #집합으로 변환
+                local_name_set = set(local_file_names)
+                remote_name_set = set(remote_file_sizes.keys())
+                
+                print('local_name_set:', local_name_set)
+                print('remote_name_set:', remote_name_set)
+
+                append_list = local_name_set - remote_name_set
+                remove_list = remote_name_set - local_name_set
+                intersect_list = local_name_set.intersection(remote_name_set)
+
+                for file in remove_list:
+                    print('\t- Removing\t' + file + '  ...', end='')
+                    self.session.delete(file)  
+                    print('\tDone')
+
+                for file in append_list:
                     if '.md' in file: continue
 
-                    print('\tUploading ' + file + '...', end='')
-                    with open(src + file, 'rb') as f:
-                        self.session.storbinary(f'STOR {file}', f)
-                        print('\t\tDone')
+                    print('\t+ Uploading\t' + file + '  ...', end='')
+                    self.session.storbinary(f'STOR {file}', open(src + file, 'rb'))
+                    print('\tDone')
+
+                for file in intersect_list:
+                    # print(f'file name: {file}, local_size: {local_file_sizes[file]}, remote_size: {remote_file_sizes[file]}')
+
+                    if int(local_file_sizes[file]) != int(remote_file_sizes[file]):
+                        print('\t* Updating\t' + file + '  ...', end='')
+                        self.session.storbinary(f'STOR {file}', open(src + file, 'rb')) 
+                        print('\tDone')
 
             self.session.cwd(self.basepath)
-            print('[! Successfully uploaded images.]')
+            print('[! Successfully synchronized.]')
         except Exception as e:
             print('Error while uploading: ' + e)
 
@@ -170,6 +193,6 @@ while True:
     src_list.append(src)
     target_list.append(target)
 
-ftp.upload(src_list, target_list)
+ftp.synchronize(src_list, target_list)
 
 ftp.close()
