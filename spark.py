@@ -1,20 +1,34 @@
 import sys
-sys.path.append('./spark/')
+sys.path.append('./spark/modules/')
 
 from Selector import Selector
 
 def main_menu():
-    idx, _ = Selector(prompt='Welcom to Spark!', item_list=[
+    menu = [
         'create new post',
-        'synchronize post with FTP server',
-        'config post',
-        'config category',
+        'synchronize post',
+        'manage post',
+        'manage category',
         'convert image URL',
         'revert image URL',
         'config FTP info',
         'config CSS style',
         'initialize blog',
-    ]).run()
+    ]
+
+    help ='''\
+create new post - Create new post automatically.
+synchronize post - Synchronize post with FTP server.
+manage post - Managing settings about specific post.
+manage category - Managing your categories.
+convert image URL - Change local image URL to embeded URL from FTP server.
+revert image URL -  Change embeded URL to local image URL.
+config FTP info - Config FTP info for using synchronize feature.
+change CSS theme - Change blog css theme.
+initialize blog - After clone from github, must run this once.
+'''
+
+    idx, _ = Selector(prompt='Welcom to Spark!', item_list=menu, help_text=help).run()
 
     return idx
 
@@ -27,11 +41,11 @@ def synchronize_post():
     pass
 
 def config_post():
-    print('config_post')
+    print('manage_post')
     pass
 
 def config_category():
-    print('config_category')
+    print('manage_category')
     pass
 
 def convert_image_url():
