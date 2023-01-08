@@ -8,18 +8,6 @@ import textwrap
 SYMBOL_UNCHECK = '[ ]'
 SYMBOL_CHECK = '[+]'
 
-class ReactiveLabel(Label):
-    text = reactive('')
-
-    def __init__(self, renderable: RenderableType = "", *, expand: bool = False, shrink: bool = False, markup: bool = True, name: str | None = None, id: str | None = None, classes: str | None = None) -> None:
-        super().__init__(renderable, expand=expand, shrink=shrink, markup=markup, name=name, id=id, classes=classes)
-
-        self.text = self.renderable
-    
-    def set_text(self, text):
-        self.text = text
-
-
 class CheckableListItem(ListItem):
     check_box = reactive('[ ]')
 
