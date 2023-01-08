@@ -1,11 +1,11 @@
 from textual.app import App, ComposeResult, events
-from textual.widgets import ListView, ListItem, Label, Footer, Static, Header, TextLog, Input
+from textual.widgets import ListView, ListItem, Label, Footer, Header, TextLog, Input
 from textual.reactive import reactive
 from textual.binding import Binding
 from rich.console import RenderableType
 from textual.screen import Screen
-from textual.containers import Vertical, Container
-import textwrap
+from textual.containers import Container
+
 
 class CheckableListItem(ListItem):
     SYMBOL_UNCHECK = '[ ]'
@@ -30,48 +30,32 @@ class CheckableListItem(ListItem):
 class ReactiveLabel(Label):
     text = reactive('')
 
-    def __init__(self, text, classes=None) -> None:
-        super().__init__(classes=classes)
-
-        self.change_text(text)
-
-    def change_text(self, text):
+    def __init__(self, text, renderable: RenderableType = "", *, expand: bool = False, shrink: bool = False, markup: bool = True, name: str | None = None, id: str | None = None, classes: str | None = None) -> None:
+        super().__init__(renderable, expand=expand, shrink=shrink, markup=markup, name=name, id=id, classes=classes)
         self.text = text
+        self.styles.background = '#0178d4'
+        self.styles.width = '100%'
+        self.styles.text_style = 'bold'
 
     def render(self) -> str:
-        return self.text
+        return ' ' + self.text
 
 
 class TUIBaseScreen(Screen):
 
-    CSS=\
-'''
-.prompt {
-    width: 100%;
-    background: $accent-darken-3;
-    text-style: bold;
-}
-
-'''
-
     BINDINGS = [
-        Binding('i', 'open_input_box', 'open input'),
-        Binding('i', 'open_input_box', 'open input'),
-        Binding('escape', 'escape', 'escape', priority=False),
+        Binding('ctrl+d', 'open_input_box', 'open input', priority=True),
+        Binding('escape', 'escape', 'escape', priority=True),
     ]
 
     def __init__(self, 
-    prompt_text='prompt_text', prompt_show=True, contents=[],
+    prompt_text='prompt_text', prompt_show=True, contents=[Label('no content'),],
     name: str | None = None, id: str | None = None, classes: str | None = None) -> None:
         super().__init__(name, id, classes)
 
-
-        contents = [ListView(
-            *((ListItem(Label(f'hi{i}'))) for i in range(20))
-        )]
-
+        self.contents = contents
         self.prompt = ReactiveLabel(prompt_text, classes='prompt')
-        self.container = Container(*contents)
+        self.container = Container(*self.contents)
         self.input_box = Input(placeholder='Press tab to focus here')
 
         self.show_input_box = False
@@ -99,8 +83,17 @@ class TUIBaseScreen(Screen):
             self.container.styles.height = self.app.size.height - 3
 
             self.input_box.styles.display = 'none'
-            app.set_focus(self.container)
+            # app.set_focus(self.app)
             self.show_input_box = False
+    
+    # def key_i(self):
+    #     if self.show_input_box == True:
+    #         self.input_box.insert_text_at_cursor('i')
+
+    # async def _on_key(self, event: events.Key) -> None:
+    #     if self.show_input_box == True:
+    #         if event.character == 'i': self.input_box.insert_text_at_cursor('i')
+    #         return await super()._on_key(event)
     
     async def _on_resize(self, event: events.Resize) -> None:
         if self.show_input_box:
@@ -123,14 +116,26 @@ class InputApp(Screen):
 
 class BSODApp(App):
     BINDINGS = [
-        ("b", "push_screen('aa')", "TUIBaseScreen"),
-        ("c", "push_screen('bb')", "InputApp")
     ]
+
+    def __init__(self):
+        super().__init__()
+
+        self.list = [
+            ListView(
+                *list(( ListItem(Label(f'hi{i}')) )for i in range(20))
+            )
+        ]
 
     def on_mount(self) -> None:
         self.install_screen(TUIBaseScreen(), name="aa")
         self.install_screen(InputApp(), name="bb")
 
+        self.push_screen('aa')
+
+
 if __name__ == "__main__":
     app = BSODApp()
     app.run()
+
+
