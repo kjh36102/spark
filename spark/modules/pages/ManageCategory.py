@@ -1,13 +1,25 @@
-def get_page():
+import sys
+sys.path.append('./spark/modules/')
+
+from TUI import Scene, Selector, get_func_names
+
+def get_scene():
     funcs = [
         create_category,
         rename_category,
         delete_category,
     ]
 
-    help = 'no help'
+    func_names = get_func_names(funcs)
 
-    return funcs, help
+    scene = Scene(
+        main_prompt='Manage Category',
+        contents=func_names,
+        callbacks=funcs,
+        callbacks_args=[()for _ in range(len(funcs))],
+    )
+
+    return scene
 
 def create_category(spark):
     raise ArithmeticError('create_category')

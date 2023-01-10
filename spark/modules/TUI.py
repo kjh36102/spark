@@ -280,7 +280,7 @@ class TUIScreen(Screen):
 # -------------------------------------------------------------------------------------------------            
 
 class Scene:
-    def __init__(self, main_prompt='Empty main prompt.', contents:list=[], callbacks:list=[], callbacks_args:list=[], help_prompt='Empty help prompt.', help_doc:str='Empty help doc', multi_select=False) -> None:
+    def __init__(self, main_prompt='Select what you want.', contents:list=[], callbacks:list=[], callbacks_args:list=[], help_prompt='Do you need help?', help_doc:str='Empty help doc', multi_select=False) -> None:
         self.main_prompt = main_prompt
         self.contents = contents
         self.help_prompt = help_prompt
@@ -302,6 +302,7 @@ class Selector(TUIScreen):
     BINDINGS = [
         Binding('space', 'select_item', 'select', key_display='SPACE'),
         Binding('enter', 'submit', '', show=False, priority=True),
+        Binding('escape', 'escape', 'back', show=True, priority=True),
     ]
 
     def __init__(self, main_contents=[Label('Empty main contents.')], multi_select=False,
@@ -322,13 +323,26 @@ class Selector(TUIScreen):
         return self.contents_listview
 
     def action_select_item(self):
+        if self.state_show_help: return
+        
         self.contents_listview.action_select_cursor()
 
     def action_submit(self):
         if super().action_enter() == True: return
 
+        if self.state_show_help: return
+
         if self.multi_select and len(self.selected_items) > 0:
             self.__run_select_callback()
+
+    def action_escape(self):
+        if self.state_show_input:
+            self.switch_input_box(close=True)
+        elif self.state_show_help:
+            self.switch_container(main=True)
+        else:
+            self.pop_scene()
+
 
     #TODO multi_select True에서 몇개 선택했는지 표시해주는 인디케이터 만들기
     def on_list_view_selected(self, event: ListView.Selected):
@@ -356,6 +370,8 @@ class Selector(TUIScreen):
         self.help_prompt_str = scene.help_prompt
         self.push_help_container(Container(Label(scene.help_doc, shrink=True)))
 
+        self.app.set_focus(self.contents_listview)
+
         self.prompt_label.text = self.help_prompt_str if self.state_show_help else self.main_prompt_str
 
     def push_scene(self, scene:Scene):
@@ -371,7 +387,8 @@ class Selector(TUIScreen):
             self.scene_stack.pop()
             self._change_scene(self.scene_stack[-1])
 
-
+def get_func_names(funcs):
+    return [(func.__name__).replace('_', ' ') for func in funcs]
 
 #----------------------------------------------------------------------------------------------------------
 

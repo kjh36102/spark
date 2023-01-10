@@ -1,9 +1,10 @@
 import sys
 sys.path.append('./spark/modules/')
 
-from TUI import Scene
+from TUI import Scene, Selector, get_func_names
 
 def get_scene():
+
     funcs = [
             create_new_post,
             synchronize_post,
@@ -30,7 +31,7 @@ change CSS theme - Change blog css theme.
 initialize blog - After clone from github, must run this once.\
 '''
 
-    func_names = [func.__name__ for func in funcs]
+    func_names = get_func_names(funcs)
 
     scene = Scene(
         contents=func_names,
@@ -57,9 +58,10 @@ def manage_post(spark):
     spark.prompt_label.text = ('manage_post')
     pass
 
-def manage_category(spark):
+from pages import ManageCategory
+def manage_category(spark:Selector):
     spark.prompt_label.text = ('manage_category')
-    pass
+    spark.push_scene(ManageCategory.get_scene())
 
 def convert_image_url(spark):
     spark.prompt_label.text = ('convert_image_url')
