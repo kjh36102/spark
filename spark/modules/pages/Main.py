@@ -1,7 +1,7 @@
 import sys
 sys.path.append('./spark/modules/')
 
-from TUI2 import Scene
+from TUI import Scene
 
 def get_scene():
     funcs = [

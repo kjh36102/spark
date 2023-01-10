@@ -2,7 +2,8 @@ import sys
 sys.path.append('./spark/modules/')
 sys.path.append('./spark/pages/')
 
-from TUI2 import Selector, App
+from textual.app import App
+from TUI import Selector
 from pages import Main
 from pages import TestScene
 
