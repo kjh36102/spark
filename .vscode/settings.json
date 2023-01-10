@@ -1,5 +1,6 @@
 {
     "python.analysis.extraPaths": [
-        "./spark/modules"
+        "./spark/modules",
+        "./spark/modules/pages"
     ]
 }
