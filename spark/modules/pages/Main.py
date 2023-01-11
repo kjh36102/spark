@@ -1,7 +1,14 @@
 import sys
 sys.path.append('./spark/modules/')
+sys.path.append('./spark/modules/pages/')
+
+from pages import ManageCategory
 
 from TUI import Scene, Selector, get_func_names
+from ManageCategory import get_category_list_scene
+
+from datetime import datetime
+import os
 
 def get_scene():
 
@@ -34,6 +41,7 @@ initialize blog - After clone from github, must run this once.\
     func_names = get_func_names(funcs)
 
     scene = Scene(
+        main_prompt='Welcome to Spark!',
         contents=func_names,
         callbacks=funcs,
         callbacks_args=[()for _ in range(len(funcs))],
@@ -42,8 +50,49 @@ initialize blog - After clone from github, must run this once.\
 
     return scene
 
-def create_new_post(spark):
-    spark.prompt_label.text = ('create_new_post')
+
+def create_new_post(spark:Selector):
+    spark.push_scene(get_category_list_scene(prompt='Which category do you want to create in?'))
+
+    def select_callback(spark:Selector):
+        _, category_name = spark.get_selected_items()
+
+        prompt_list = [
+            ("Type new post's title", 'post title'),
+            ('Use comments?','y or n (default: y)'),
+            ('Type tag list with commas(,)', 'ex) IT, Python, Blogging')
+        ]    
+
+        def __create_post(spark:Selector):
+            inputs = spark.get_input(len(prompt_list))
+
+            post_title, post_comments, post_tags = inputs
+
+            #base파일 불러오기
+            f = open('./spark/post_base.md', 'r', encoding='utf-8')
+            base_raw = ''.join(f.readlines())
+            f.close()
+
+            #base파일 변형하기
+            base_raw = base_raw.replace('post_title', post_title)
+            base_raw = base_raw.replace('post_comments', 'false' if post_comments == 'n' else 'true')
+            base_raw = base_raw.replace('post_categories', category_name)
+            base_raw = base_raw.replace('post_tags', post_tags)
+            base_raw = base_raw.replace('post_contents', f'generated at {datetime.now()}')
+
+
+            #category폴더에 파일 생성하기
+            post_dir = f'./_posts/{category_name}/{post_title}'
+            post_file_path = f'{post_dir}/{post_title}.md'
+            os.makedirs(post_dir)
+            f = open(post_file_path, 'w', encoding='utf-8')
+            f.write(base_raw)
+
+            spark.app.alert(f'Succefully created new post: {post_file_path}')
+            
+        spark.request_input(prompt=prompt_list, callback=__create_post)
+        
+    spark.set_select_callback(select_callback, reuse=True)
     pass
 
 def synchronize_post(spark):
@@ -58,7 +107,6 @@ def manage_post(spark):
     spark.prompt_label.text = ('manage_post')
     pass
 
-from pages import ManageCategory
 def manage_category(spark:Selector):
     spark.prompt_label.text = ('manage_category')
     spark.push_scene(ManageCategory.get_scene())
@@ -71,8 +119,10 @@ def revert_image_url(spark):
     spark.prompt_label.text = ('revert_image_url')
     pass
 
-def config_ftp_info(spark):
-    spark.prompt_label.text = ('config_ftp_info')
+import ConfigFTPInfo
+def config_ftp_info(spark:Selector):
+    spark.push_scene(ConfigFTPInfo.get_scene())
+    
     pass
 
 def change_css_theme(spark):

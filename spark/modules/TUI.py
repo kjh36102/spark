@@ -5,6 +5,10 @@ from textual.binding import Binding
 from textual.screen import Screen
 from textual.containers import Container
 from textual.scrollbar import ScrollBar
+from time import sleep
+from threading import Thread
+
+from types import FunctionType
 
 class CheckableListItem(ListItem):
     SYMBOL_UNCHECK = '[ ]'
@@ -27,8 +31,8 @@ class CheckableListItem(ListItem):
 class ReactiveLabel(Label):
     text = reactive('')
 
-    def __init__(self, text, classes=None) -> None:
-        super().__init__(classes=classes)
+    def __init__(self, text, classes=None, id=None, shrink=True) -> None:
+        super().__init__(classes=classes, id=id, shrink=shrink)
         self.text = text
 
         #styles
@@ -88,9 +92,14 @@ class TUIScreen(Screen):
         self.container_max_size = (0, 0)
         self.control_target = self.main_container
         self.input_last_focused = None
-        self.input_buffer = None
-        self.input_getter = lambda x: x
-        self.input_getter_args = ()
+        self.input_request_buffer = []
+        self.input_buffer = []
+        self.last_input_prompt = None
+
+
+        # self.input_getter = lambda x: x
+        # self.input_getter_args = ()
+        self.input_getter_buffer = []
         self.saved_focus = None
 
         #hide all
@@ -116,9 +125,25 @@ class TUIScreen(Screen):
 # actions-----------------------------------------------------------------------------------------
     def action_enter(self):
         if self.state_show_input:
-            self.input_buffer = self.input_box.value
-            self.switch_input_box(close=True, clear=True)
-            self.__run_input_getter()
+
+            if len(self.input_request_buffer) > 0 :#and self.input_box.value != '':
+                self.input_buffer.append(self.input_box.value)
+                self.input_request_buffer.pop(0)
+
+                if self.input_request_buffer[0] == False:
+                    self.input_request_buffer.pop(0)
+                    getter, getter_args = self.input_getter_buffer.pop(0)
+                    self.switch_input_box(close=True, clear=True)
+                    self.last_input_prompt = None
+                    getter(self, *getter_args)
+
+                if len(self.input_request_buffer) > 0:
+                    self.switch_input_box(open=True, clear=True)
+
+                    prompts = self.input_request_buffer[0]
+                    self.load_prompt(prompt=prompts[0], hint=prompts[1])
+            else:
+                self.switch_input_box(close=True, clear=True)
             return True
         return False
 
@@ -204,6 +229,23 @@ class TUIScreen(Screen):
         self.saved_focus = self.app.focused
         self.app.set_focus(None)
 
+
+    def alert_line(self, text, time=3):
+        def __alert(self:TUIScreen, text, time):
+            self.prompt_label.text = text
+            sleep(time)
+            # self.prompt_label.text = self.help_prompt_str if self.state_show_help else self.main_prompt_str
+            self.refresh_prompt()
+
+        th = Thread(target=__alert, args=(self, text, time))
+        th.daemon = True
+        th.start()
+
+    def refresh_prompt(self):
+        prompt = self.help_prompt_str if self.state_show_help else self.main_prompt_str
+        self.load_prompt(prompt=prompt, hint='')
+        
+
 # ------------------------------------------------------------------------------------------------
 
 # functions---------------------------------------------------------------------------------------
@@ -211,7 +253,8 @@ class TUIScreen(Screen):
         if main == help == False: main = help = True
 
         if self.state_show_help == False and help:
-            self.prompt_label.text = self.help_prompt_str
+            self.load_prompt(self.help_prompt_str, self.input_box.placeholder)
+            # self.prompt_label.text = self.help_prompt_str
             self.main_container.styles.display = 'none'
             self.help_container.styles.display = 'block'
             self.control_target = self.help_container
@@ -219,12 +262,22 @@ class TUIScreen(Screen):
             self.state_show_help = True
 
         elif self.state_show_help == True and main:
-            self.prompt_label.text = self.main_prompt_str
+            self.load_prompt(self.main_prompt_str, self.input_box.placeholder)
+            # self.prompt_label.text = self.main_prompt_str
             self.main_container.styles.display = 'block'
             self.help_container.styles.display = 'none'
             self.control_target = self.main_container
             self.app.set_focus(self.saved_focus)
             self.state_show_help = False
+
+    def load_prompt(self, prompt=None, hint=None):
+        self.prompt_label.text = self.last_input_prompt[0]
+        self.input_box.placeholder = self.last_input_prompt[1]
+
+        self.last_input_prompt = (prompt, hint)
+    
+    def save_prompt(self):
+        self.last_input_prompt = (self.prompt_label.text, self.input_box.placeholder)
 
     def switch_input_box(self, open=False, close=False, clear=False):
         if open == close == False: open = close = True
@@ -235,19 +288,62 @@ class TUIScreen(Screen):
             self.input_box.styles.display = 'block'
             self.input_last_focused = self.app.focused
             self.app.set_focus(self.input_box)
+            # self.set_prompt(prompt=self.current_input_prompt[0], hint=self.current_input_prompt[1])
+            # self.refresh_prompt()
+            self.save_prompt()
             self.state_show_input = True
 
         elif self.state_show_input == True and close:
             self.input_box.styles.display = 'none'
             self.app.set_focus(self.input_last_focused)
+            # self.save_prompt()
+            # self.refresh_prompt()
+            self.load_prompt(*self.last_input_prompt)
             self.state_show_input = False
 
-    def request_input(self, getter, getter_args=(), placeholder='Need some Inputs.'):
-        self.input_box.placeholder = placeholder
+
+    def request_input(self, prompt:tuple[str]|list[tuple], callback:FunctionType, callback_args:tuple=()):
+        '''Make user to input something.
+
+        Open input box and make user to input something.
+        Callback function will called when user complete a set of request.
+        This will not wait until user make some input.
+
+        Args:
+        
+            prompt: prompt and hint
+            callback:  which called when user complete requests
+            callback_args (optional): callback arguments
+
+        Example::
+
+            def do_something(selector:Selector):
+
+                prompts = [('Type ID', 'ID'), ('Type PW', 'PW'), ('Type Email', 'Email')]
+
+                def my_callback(selector:Selector, arg1, arg2):
+                    inputs = selector.get_input(len(prompts))
+                    selector.alert_line(f'ID:{inputs[0]}, PW:{inputs[1]}, Email:{inputs[2]}')
+
+                selector.request_input(prompts, my_callback, args=('arg1', 'arg2'))
+        '''
+
+        # self.input_box.placeholder = prompt
+        if type(prompt) == list:
+            for item in prompt:
+                self.input_request_buffer.append(item)
+        else: self.input_request_buffer.append(prompt)
+
+        #seperate input sequence        
+        self.input_request_buffer.append(False)
+
+        self.input_getter_buffer.append((callback, callback_args))
+
         self.switch_input_box(open=True)
 
-        self.input_getter = getter
-        self.input_getter_args = getter_args
+        args = (prompt[0][0], prompt[0][1])
+        self.load_prompt(*args)
+        
 
     def __run_input_getter(self):
         self.input_getter(self, *self.input_getter_args)
@@ -277,6 +373,35 @@ class TUIScreen(Screen):
         self.help_container = container
         if self.state_show_help: self.control_target = container
         else: self.help_container.styles.display = 'none'
+    
+    def get_input(self, cnt:int=1):
+        '''Get inputs from input buffer.
+
+        After call ``Selector#request_input()``, get inputs from input buffer.
+        This should be used in the callback function which passed in ``Selector#request_input()``
+
+        Args:
+        
+            cnt: a number of how many inputs to get from buffer
+            
+        Returns:
+            ``None`` if there's nothing in buffer else ``input | list[input]``
+
+        Example::
+
+            def do_something(selector:Selector):
+
+                prompts = [('Type ID', 'ID'), ('Type PW', 'PW'), ('Type Email', 'Email')]
+
+                def my_callback(selector:Selector, arg1, arg2):
+                    inputs = selector.get_input(len(prompts))
+                    selector.alert_line(f'ID:{inputs[0]}, PW:{inputs[1]}, Email:{inputs[2]}')
+
+                selector.request_input(prompts, my_callback, args=('arg1', 'arg2'))
+        '''
+        if len(self.input_buffer) >= cnt:
+            return self.input_buffer.pop(0) if cnt == 1 else [self.input_buffer.pop(0) for _ in range(cnt)]
+        else: return None
 # -------------------------------------------------------------------------------------------------            
 
 class Scene:
@@ -285,8 +410,8 @@ class Scene:
         self.contents = contents
         self.help_prompt = help_prompt
         self.help_doc = help_doc
-        self.callbacks = callbacks
-        self.callbacks_args = callbacks_args
+        self.callbacks = callbacks if len(callbacks) > 0 else [lambda x: x for _ in range(len(contents))]
+        self.callbacks_args = callbacks_args if len(callbacks_args) > 0 else [() for _ in range(len(contents))]
         self.multi_select = multi_select
 
     def add(self, content, callback, callback_arg):
@@ -312,6 +437,7 @@ class Selector(TUIScreen):
 
         self.select_callback = None
         self.select_callback_args = None
+        self.select_callback_reuse = False
 
         self.scene_stack = []
 
@@ -334,14 +460,17 @@ class Selector(TUIScreen):
 
         if self.multi_select and len(self.selected_items) > 0:
             self.__run_select_callback()
+        # else:
+        #     self.contents_listview.action_select_cursor()
 
     def action_escape(self):
         if self.state_show_input:
             self.switch_input_box(close=True)
+            self.clear_context(callback_alive=True)
         elif self.state_show_help:
             self.switch_container(main=True)
-        else:
-            self.pop_scene()
+        else: self.pop_scene()
+
 
 
     #TODO multi_select True에서 몇개 선택했는지 표시해주는 인디케이터 만들기
@@ -357,22 +486,42 @@ class Selector(TUIScreen):
                 self.selected_items.pop(self.contents_listview.index)
         else:
             self.selected_items = (self.contents_listview.index, self.item_list[self.contents_listview.index])
-            self.__run_select_callback(self.contents_listview.index)
+            self.__run_select_callback()
 
-    def __run_select_callback(self, selected_idx):
-        scene = self.scene_stack[-1]
-        scene.callbacks[selected_idx](self, *(scene.callbacks_args[selected_idx]))
+    def set_select_callback(self, callback, callback_args=(), reuse=False):
+        self.select_callback = callback
+        self.select_callback_args = callback_args
+        self.select_callback_reuse = reuse
+
+    def get_selected_items(self):
+        ret = self.selected_items
+        self.selected_items = {} if self.multi_select else None
+        return ret
+
+    def __run_select_callback(self):
+        if self.select_callback == None:
+            scene:Scene = self.scene_stack[-1]
+            idx = self.contents_listview.index
+            scene.callbacks[idx](self, *(scene.callbacks_args[idx]))
+        else:
+            self.select_callback(self, *self.select_callback_args)
+            if not self.select_callback_reuse:
+                self.select_callback = None
+                self.select_callback_args = None
 
     def _change_scene(self, scene:Scene):
+        self.clear_context()
+
         self.main_prompt_str = scene.main_prompt
         self.push_main_container(Container(self.build_listview(scene.contents, scene.multi_select)))
 
         self.help_prompt_str = scene.help_prompt
         self.push_help_container(Container(Label(scene.help_doc, shrink=True)))
 
-        self.app.set_focus(self.contents_listview)
+        self.app.action_focus_next()
 
-        self.prompt_label.text = self.help_prompt_str if self.state_show_help else self.main_prompt_str
+        #self.prompt_label.text = self.help_prompt_str if self.state_show_help else self.main_prompt_str
+        self.refresh_prompt()
 
     def push_scene(self, scene:Scene):
         try:
@@ -386,9 +535,109 @@ class Selector(TUIScreen):
         if len(self.scene_stack) > 1:
             self.scene_stack.pop()
             self._change_scene(self.scene_stack[-1])
+        
+        # self.app.set_focus(self.contents_listview)
+    
+    def clear_context(self, callback_alive=False):
+        if len(self.input_request_buffer) > 0:
+            self.input_buffer.clear()
+            self.input_request_buffer.clear()
+            self.input_getter_buffer.clear()
+
+        # self.input_box.placeholder = ''
+        self.refresh_prompt()
+        if callback_alive == False:
+            self.select_callback = self.select_callback_args = None
+            self.select_callback_reuse = False
 
 def get_func_names(funcs):
     return [(func.__name__).replace('_', ' ') for func in funcs]
+
+
+
+
+from textual.app import App, ComposeResult
+from textual.containers import Grid
+from textual.screen import Screen
+from textual.widgets import Header, Footer, Button
+
+class AlertScreen(Screen):
+    BINDINGS = [
+        Binding('space', 'space', 'select', show=False, priority=True),
+        Binding('enter', 'enter', '', show=False, priority=True),
+    ]
+
+    def action_space(self):
+        self.button.press()
+    
+    def action_enter(self):
+        self.button.press()
+
+    def __init__(self, name: str | None = None, id: str | None = None, classes: str | None = None) -> None:
+        super().__init__(name, id, classes)
+
+        self.prompt_label = ReactiveLabel('Alert')
+        self.label = ReactiveLabel("Are you sure you want to quit?asdfjl adflasdfaklsdlasfdl asnsfadsfadasdfas", id="question")
+        self.button = Button("OK", variant="primary", id='ok_btn')
+        self.grid = Grid(self.label, self.button)
+
+        self.grid.styles.grid_size_columns = 1
+        self.grid.styles.grid_gutter_horizontal = 2
+        self.grid.styles.grid_gutter_vertical = 1
+
+        self.label.styles.background = None
+        self.label.styles.width = '100%'
+        self.label.styles.height = '100%'
+        self.label.styles.content_align = ('center', 'bottom')
+
+        self.button.styles.content_align = ('center', 'bottom')
+        self.button.styles.width = 10
+
+    def compose(self) -> ComposeResult:
+        yield self.prompt_label
+        yield self.grid
+        yield Footer()
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        self.app.pop_screen()
+
+    async def _on_resize(self, event: events.Resize) -> None:
+        self.button.styles.margin = (0, 0, 0, int(((self.app.size.width) - self.button.size.width) / 2))
+        return await super()._on_resize(event)
+
+
+# class ModalApp(App):
+# #     CSS = '''\
+# # #dialog {
+# #     grid-size: 1;
+# #     grid-gutter: 1 2;
+# #     margin: 0 10 0 10;
+# # }
+
+# # #question {
+# #     content-align: center bottom;
+# #     width: 100%;
+# #     height: 100%;
+# # }
+
+# # Button {
+# #     content-align: center bottom;
+# #     width: 10;
+# # }    
+# # '''
+#     BINDINGS = [("q", "request_quit", "Quit")]
+
+#     def compose(self) -> ComposeResult:
+#         yield Header()
+#         yield Footer()
+
+#     def action_request_quit(self) -> None:
+#         self.push_screen(AlertScreen())
+
+
+# if __name__ == "__main__":
+#     app = ModalApp()
+#     app.run()            
 
 #----------------------------------------------------------------------------------------------------------
 
