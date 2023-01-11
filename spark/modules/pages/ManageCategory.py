@@ -46,7 +46,7 @@ def create_category(spark:Selector):
 
         spark.alert_line(f'Successfully created new category: {category_name}')
 
-    spark.request_input('New Category name', callback=_make_category_file)
+    spark.request_input(('Type your new category name.', 'new category name'), callback=_make_category_file)
 
 def rename_category(spark:Selector):
     spark.push_scene(get_category_list_scene())
@@ -65,8 +65,8 @@ def delete_category(spark:Selector):
         selected_category = spark.get_selected_items()[1]
 
         #카테고리 내 포스팅도 다 삭제할 지 물어보기
-        spark.request_input('Do you want to remove all posts in the category?')
-        spark.request_input()
+        # spark.request_input('Do you want to remove all posts in the category?')
+        # spark.request_input()
 
         #선택한 카테고리 내 포스팅 내부 categories 를 uncategorized로 수정하기
         

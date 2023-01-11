@@ -14,7 +14,7 @@ def get_scene():
 
     scene = Scene(
         contents=contents,
-        callbacks=funcs
+        callbacks=funcs, 
     )
 
     return scene
@@ -28,7 +28,7 @@ def see_config_info(spark:Selector):
     pass
 
 def reconfigure(spark:Selector):
-    spark.prompt_label.text = "Please input your web FTP info. Don't worry. It will not shown to public."
+    # spark.prompt_label.text = "Please input your web FTP info. Don't worry. It will not shown to public."
 
     def _reconfigure_ftp_info(spark:Selector):
         hostname, username, password, basepath, port, encoding = spark.get_input(6)
@@ -50,10 +50,10 @@ def reconfigure(spark:Selector):
         spark.app.alert(f'Your FTP info is saved into ftp_info.yml.')
 
     spark.request_input(prompt=[
-        'hostname',
-        'username',
-        'password',
-        'basepath (ex=/HDD1/embed)',
-        'port (default=21)',
-        'encoding (default=utf-8)',
+        ('Type FTP server hostname.', 'ex) 192.168.xxx.xxx, ex) my-domain.com'),
+        ('Type FTP server username.', 'username or ID'),
+        ('Type FTP server password.', 'password'),
+        ('Type FTP server basepath', 'root path which synchronize with local ex) /HDD1/embed'),
+        ('Type FTP server port.', 'default: 21'),
+        ('Type FTP server encoding.', 'default: utf-8'),
     ], callback=_reconfigure_ftp_info)

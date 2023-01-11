@@ -84,7 +84,7 @@ def create_new_post(spark:Selector):
             #category폴더에 파일 생성하기
             post_dir = f'./_posts/{category_name}/{post_title}'
             post_file_path = f'{post_dir}/{post_title}.md'
-            os.makedirs(post_dir)
+            os.makedirs(post_dir, exist_ok=True)
             f = open(post_file_path, 'w', encoding='utf-8')
             f.write(base_raw)
 
