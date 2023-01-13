@@ -328,7 +328,7 @@ class TUIScreen(Screen):
         self.input_getter_buffer.append((callback, callback_args))
 
         # 요청 0번째 가져다 프롬프트 업데이트
-        self.set_input_prompt(prompt[0][0], prompt[0][1])
+        self.set_input_prompt(self.input_request_buffer[0][0], self.input_request_buffer[0][1])
 
         # 입력 창 띄우기
         self.switch_input_box(open=True, clear=True)
@@ -533,6 +533,18 @@ class Selector(TUIScreen):
         if callback_alive == False:
             self.select_callback = self.select_callback_args = None
             self.select_callback_reuse = False
+            
+    def remove_list_item(self, index):
+        self.contents_listview.children[index].remove()
+        self.contents_listview.refresh(repaint=True, layout=True)
+        # self.set_focus(self.contents_listview)
+        # self.contents_listview.action_cursor_down
+        # remain_children = self.contents_listview.children._nodes
+        # self.contents_listview.clear()
+        # for item in remain_children:
+        #     self.contents_listview.append(item)
+        # self.contents_listview.children._nodes.pop(index)
+        # self.contents_listview
 
 def get_func_names(funcs):
     return [(func.__name__).replace('_', ' ') for func in funcs]

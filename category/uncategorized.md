@@ -1,4 +1,4 @@
 ---
 layout: category
-title: machine learning
+title: uncategorized
 ---

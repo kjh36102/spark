@@ -1,4 +1,4 @@
 ---
 layout: category
-title: my_category
+title: category1
 ---

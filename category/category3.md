@@ -1,4 +1,4 @@
 ---
 layout: category
-title: foods
+title: category3
 ---
