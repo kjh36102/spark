@@ -18,6 +18,73 @@ import asyncio
 from threading import Thread
 
 
+DUMMY_LONG = '''\
+Lorem Ipsum is simply dummy text of the printing and typesetting industry. Lorem Ipsum has been the industry's standard dummy text ever since the 1500s, when an unknown printer took a galley of type and scrambled it to make a type specimen book. It has survived not only five centuries, but also the leap into electronic typesetting, remaining essentially unchanged. It was popularised in the 1960s with the release of Letraset sheets containing Lorem Ipsum passages, and more recently with desktop publishing software like Aldus PageMaker including versions of Lorem Ipsum.
+Contrary to popular belief, Lorem Ipsum is not simply random text. It has roots in a piece of classical Latin literature from 45 BC, making it over 2000 years old. Richard McClintock, a Latin professor at Hampden-Sydney College in Virginia, looked up one of the more obscure Latin words, consectetur, from a Lorem Ipsum passage, and going through the cites of the word in classical literature, discovered the undoubtable source. Lorem Ipsum comes from sections 1.10.32 and 1.10.33 of "de Finibus Bonorum et Malorum" (The Extremes of Good and Evil) by Cicero, written in 45 BC. This book is a treatise on the theory of ethics, very popular during the Renaissance. The first line of Lorem Ipsum, "Lorem ipsum dolor sit amet..", comes from a line in section 1.10.32.
+Lorem Ipsum is simply dummy text of the printing and typesetting industry. Lorem Ipsum has been the industry's standard dummy text ever since the 1500s, when an unknown printer took a galley of type and scrambled it to make a type specimen book. It has survived not only five centuries, but also the leap into electronic typesetting, remaining essentially unchanged. It was popularised in the 1960s with the release of Letraset sheets containing Lorem Ipsum passages, and more recently with desktop publishing software like Aldus PageMaker including versions of Lorem Ipsum.
+Contrary to popular belief, Lorem Ipsum is not simply random text. It has roots in a piece of classical Latin literature from 45 BC, making it over 2000 years old. Richard McClintock, a Latin professor at Hampden-Sydney College in Virginia, looked up one of the more obscure Latin words, consectetur, from a Lorem Ipsum passage, and going through the cites of the word in classical literature, discovered the undoubtable source. Lorem Ipsum comes from sections 1.10.32 and 1.10.33 of "de Finibus Bonorum et Malorum" (The Extremes of Good and Evil) by Cicero, written in 45 BC. This book is a treatise on the theory of ethics, very popular during the Renaissance. The first line of Lorem Ipsum, "Lorem ipsum dolor sit amet..", comes from a line in section 1.10.32.\
+'''
+
+DUMMY_SHROT = '''\
+Lorem Ipsum is simply dummy text of the printing and typesetting industry. Lorem Ipsum has been the industry's standard dummy text ever since the 1500s, when an unknown printer took a galley of type and scrambled it to make a type specimen book. It has survived not only five centuries, but also the leap into electronic typesetting, remaining essentially unchanged. It was popularised in the 1960s with the release of Letraset sheets containing Lorem Ipsum passages, and more recently with desktop publishing software like Aldus PageMaker including versions of Lorem Ipsum.\
+'''
+
+class CustomProcess(Thread):
+    def __init__(self, app) -> None:
+        super().__init__()
+        self.app = app
+        self.running_state = False
+        self.response = None
+        
+    def register(self, target, args):
+        self.target = target
+        self.args = args
+              
+    def run(self):
+        if self.target != None:
+            self.target(*self.args)
+
+    def start(self):
+        self.running_state = True
+        super().start()
+        return self
+   
+    def stop(self): 
+        thread_id = self.ident
+        res = ctypes.pythonapi.PyThreadState_SetAsyncExc(thread_id, 
+              ctypes.py_object(SystemExit)) 
+        if res > 1: 
+            ctypes.pythonapi.PyThreadState_SetAsyncExc(thread_id, 0) 
+            print('Failed to stop thread with id', thread_id)
+
+    def response_input(self, response):
+        self.response = response
+        
+    def request_input(self, request:InputRequest, polling_interval=0.1):
+        input_container:InputContainer = self.app.main_screen.input_container
+        
+        input_container.set(request.prompt, request.help_doc, request.hint)
+        input_container.show()
+        self.app.set_focus(input_container.input_box)
+
+        self.running_state = False
+        
+        while self.response == None: sleep(polling_interval)
+
+        self.running_state = True
+        
+        ret = self.response
+        self.response = None
+        
+        return ret
+
+class SubmitFlag(Enum):
+    IDLE = auto()
+    SUBMITTED = auto()
+    VALID = auto()
+    INVALID = auto()
+    ABORTED = auto()
+
 
 class ReactiveLabel(Label):
     value = reactive('')
@@ -65,18 +132,6 @@ class CheckableListItem(ListItem):
     def render(self):
         if self.show_checkbox: return f' {self.check_box}  {self.value}'
         else: return f' >  {self.value}'
-
-
-DUMMY_LONG = '''\
-Lorem Ipsum is simply dummy text of the printing and typesetting industry. Lorem Ipsum has been the industry's standard dummy text ever since the 1500s, when an unknown printer took a galley of type and scrambled it to make a type specimen book. It has survived not only five centuries, but also the leap into electronic typesetting, remaining essentially unchanged. It was popularised in the 1960s with the release of Letraset sheets containing Lorem Ipsum passages, and more recently with desktop publishing software like Aldus PageMaker including versions of Lorem Ipsum.
-Contrary to popular belief, Lorem Ipsum is not simply random text. It has roots in a piece of classical Latin literature from 45 BC, making it over 2000 years old. Richard McClintock, a Latin professor at Hampden-Sydney College in Virginia, looked up one of the more obscure Latin words, consectetur, from a Lorem Ipsum passage, and going through the cites of the word in classical literature, discovered the undoubtable source. Lorem Ipsum comes from sections 1.10.32 and 1.10.33 of "de Finibus Bonorum et Malorum" (The Extremes of Good and Evil) by Cicero, written in 45 BC. This book is a treatise on the theory of ethics, very popular during the Renaissance. The first line of Lorem Ipsum, "Lorem ipsum dolor sit amet..", comes from a line in section 1.10.32.
-Lorem Ipsum is simply dummy text of the printing and typesetting industry. Lorem Ipsum has been the industry's standard dummy text ever since the 1500s, when an unknown printer took a galley of type and scrambled it to make a type specimen book. It has survived not only five centuries, but also the leap into electronic typesetting, remaining essentially unchanged. It was popularised in the 1960s with the release of Letraset sheets containing Lorem Ipsum passages, and more recently with desktop publishing software like Aldus PageMaker including versions of Lorem Ipsum.
-Contrary to popular belief, Lorem Ipsum is not simply random text. It has roots in a piece of classical Latin literature from 45 BC, making it over 2000 years old. Richard McClintock, a Latin professor at Hampden-Sydney College in Virginia, looked up one of the more obscure Latin words, consectetur, from a Lorem Ipsum passage, and going through the cites of the word in classical literature, discovered the undoubtable source. Lorem Ipsum comes from sections 1.10.32 and 1.10.33 of "de Finibus Bonorum et Malorum" (The Extremes of Good and Evil) by Cicero, written in 45 BC. This book is a treatise on the theory of ethics, very popular during the Renaissance. The first line of Lorem Ipsum, "Lorem ipsum dolor sit amet..", comes from a line in section 1.10.32.\
-'''
-
-DUMMY_SHROT = '''\
-Lorem Ipsum is simply dummy text of the printing and typesetting industry. Lorem Ipsum has been the industry's standard dummy text ever since the 1500s, when an unknown printer took a galley of type and scrambled it to make a type specimen book. It has survived not only five centuries, but also the leap into electronic typesetting, remaining essentially unchanged. It was popularised in the 1960s with the release of Letraset sheets containing Lorem Ipsum passages, and more recently with desktop publishing software like Aldus PageMaker including versions of Lorem Ipsum.\
-'''
 
 class InputContainer(Container):
     
@@ -152,7 +207,7 @@ class InputContainer(Container):
         self.app.push_screen(help_screen)
         
     async def action_submit_input(self):
-        await self.emit(InputSubmit(sender=self))
+        await self.emit(InputSubmit(self, self.input_box.value))
         
     def __set(self, prompt, help_doc, hint):
         self.prompt.value = prompt
@@ -328,8 +383,6 @@ class HelpScreen(Screen):
         if self.resize_flag: self.resize(); self.resize_flag = False
         return await super()._on_idle(event)
         
-
-        
     
     def action_scroll_up(self):
         self.contents_container.action_scroll_up()
@@ -429,8 +482,6 @@ class LoggerScreen(Screen):
         self.logger.write(text)
 
 
-
-
 class MainScreen(Screen):
     
     def __init__(self, name: str | None = None, id: str | None = None, classes: str | None = None) -> None:
@@ -442,8 +493,8 @@ class MainScreen(Screen):
         self.help_title = 'Empty help title.'
         self.help_doc = 'Empty help doc.'
         
-        self.input_requests = []
-        
+        self.custom_process = None
+
     def compose(self):
         yield self.prompt
         yield self.input_container
@@ -453,9 +504,11 @@ class MainScreen(Screen):
     def on_mount(self):
         self.list_container.push_list([f'hi{i}' for i in range(50)])
     
-    def on_submit_input(self, event: InputSubmit):
-        pass
-        
+    def on_input_submit(self, message: InputSubmit):
+        # self.submit_flag = SubmitFlag.SUBMITTED
+        # self.prompt.value = message.value
+        self.custom_process.response_input(message.value) 
+        # self.input_container.clear()
         
     BINDINGS = [
         Binding('h', 'open_help', 'open help'),
@@ -479,15 +532,30 @@ class MainScreen(Screen):
     def action_release_focus(self):
         self.app.set_focus(None)
 
+    def run_custom_process(self, custom_process:CustomProcess):
+        self.custom_process = custom_process
+        self.custom_process.start()
 
+class TestChangePromptProcess(CustomProcess):
+    def __init__(self, app) -> None:
+        super().__init__(app)
 
-class SubmitFlag(Enum):
-    IDLE = auto()
-    SUBMITTED = auto()
-    VALID = auto()
-    INVALID = auto()
-    ABORTED = auto()
+    def run(self):
+        new_prompt = self.request_input(InputRequest(
+            prompt='프롬프트 변경',
+            help_doc='입력한 값으로 프롬프트 텍스트를 변경합니다.',
+            hint='텍스트'
+        ))
 
+        self.app.main_screen.prompt.value = new_prompt
+
+        want_exit = self.request_input(InputRequest(
+            prompt='프로그램 종료',
+            help_doc='프로그램을 종료하시겠습니까?',
+            hint='y/n'
+        ))
+
+        if want_exit == 'y': self.app.exit()
 
 class TUIApp(App):
     
@@ -497,7 +565,7 @@ class TUIApp(App):
         self.logger_screen = LoggerScreen()
         self.help_screen = HelpScreen()
         
-        self.submit_flag = SubmitFlag.IDLE
+        # self.submit_flag = SubmitFlag.IDLE
         
     def on_mount(self):
         #install main screen
@@ -522,32 +590,8 @@ class TUIApp(App):
         Binding('ctrl+z', 'test4', 'test4')
     ]
     
-    # def on_input_submit(self, message: TUI_events.InputSubmit):
-    #     self.submit_flag = SubmitFlag.SUBMITTED
-    #     self.main_screen.input_container.clear()
-    
-    async def test1(self):
-        # pass
-        request = InputRequest(
-            prompt='프롬프트 변경',
-            help_doc='입력한 값으로 프롬프트 텍스트를 변경합니다.',
-            hint='텍스트'
-        )
-        
-        def checker(value):
-            if type(value) != str: return '자료형이 올바르지 않습니다.'
-            if value == 'no': return '그 단어는 사용할 수 없습니다.'
-            return True
-        
-        code, value = self.request_input(
-            request=request,
-            valid_checker=checker
-        )
-        
-        if code == SubmitFlag.VALID: self.main_screen.prompt.value = value
-    
-    async def action_test1(self):
-        await asyncio.create_task(self.test1())
+    def action_test1(self):
+        self.main_screen.run_custom_process(TestChangePromptProcess(self))
         pass
     
     def action_test2(self):
@@ -564,31 +608,31 @@ class TUIApp(App):
         self.logger_screen.print(text)
     
     
-    def request_input(self, request:InputRequest, valid_checker=(lambda x: True), valid_checker_args=(), polling_interval=0.1):
-        main_screen:MainScreen = self.get_screen('main')
-        input_container:InputContainer = main_screen.input_container
+    # def request_input(self, request:InputRequest, valid_checker=(lambda x: True), valid_checker_args=(), polling_interval=0.1):
+    #     main_screen:MainScreen = self.get_screen('main')
+    #     input_container:InputContainer = main_screen.input_container
         
-        input_container.set(request.prompt, request.help_doc, request.hint)
-        main_screen.action_toggle_input_container()
-        self.set_focus(input_container.input_box)
+    #     input_container.set(request.prompt, request.help_doc, request.hint)
+    #     main_screen.action_toggle_input_container()
+    #     self.set_focus(input_container.input_box)
 
-        ret = (self.submit_flag, None)
-        while True:
-            if self.submit_flag == SubmitFlag.SUBMITTED:
-                submit_value = input_container.input_box.value
-                msg = valid_checker(submit_value, *valid_checker_args)
-                if msg == True: ret = (SubmitFlag.VALID, submit_value)
-                else: ret = (SubmitFlag.INVALID, msg)
-                break
-            elif self.submit_flag == SubmitFlag.ABORTED:
-                input_container.clear()
-                ret = (SubmitFlag.ABORTED, None)
-                break
-            time.sleep(polling_interval)
+    #     ret = (self.submit_flag, None)
+    #     while True:
+    #         if self.submit_flag == SubmitFlag.SUBMITTED:
+    #             submit_value = input_container.input_box.value
+    #             msg = valid_checker(submit_value, *valid_checker_args)
+    #             if msg == True: ret = (SubmitFlag.VALID, submit_value)
+    #             else: ret = (SubmitFlag.INVALID, msg)
+    #             break
+    #         elif self.submit_flag == SubmitFlag.ABORTED:
+    #             input_container.clear()
+    #             ret = (SubmitFlag.ABORTED, None)
+    #             break
+    #         time.sleep(polling_interval)
             
         
-        self.submit_flag = SubmitFlag.IDLE
-        return ret
+    #     self.submit_flag = SubmitFlag.IDLE
+    #     return ret
         
 
 if __name__ == '__main__':
