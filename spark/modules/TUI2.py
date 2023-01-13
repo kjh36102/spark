@@ -9,12 +9,15 @@ from textual.color import Color
 from textual.message_pump import messages
 from textual.scrollbar import ScrollDown
 
-import TUI_events
+from TUI_events import *
 from TUI_DAO import *
 
 from enum import Enum, auto
 import time
 import asyncio
+from threading import Thread
+
+
 
 class ReactiveLabel(Label):
     value = reactive('')
@@ -149,7 +152,7 @@ class InputContainer(Container):
         self.app.push_screen(help_screen)
         
     async def action_submit_input(self):
-        await self.emit(TUI_events.InputSubmit(sender=self))
+        await self.emit(InputSubmit(sender=self))
         
     def __set(self, prompt, help_doc, hint):
         self.prompt.value = prompt
@@ -450,7 +453,7 @@ class MainScreen(Screen):
     def on_mount(self):
         self.list_container.push_list([f'hi{i}' for i in range(50)])
     
-    def on_submit_input(self, event: TUI_events.InputSubmit):
+    def on_submit_input(self, event: InputSubmit):
         pass
         
         
