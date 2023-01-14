@@ -1,10 +1,17 @@
-import shutil
-import os
-# from TUI import Scene, Selector, get_func_names
-from TUI_DAO import Scene, get_func_names
-from TUI_Widgets import CheckableListItem
 import sys
 sys.path.append('./spark/modules/')
+
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from TUI import TUIApp
+
+from TUI_DAO import Scene, get_func_names, InputRequest
+from TUI_Widgets import CheckableListItem
+from TUI_events import CustomProcess
+
+import shutil
+import os
 
 
 def get_scene():
@@ -30,6 +37,9 @@ def get_category_list_scene(prompt='Please select category.', callback=lambda x,
     
     try: categories.remove('uncategorized')
     except ValueError: build_category_md('uncategorized')
+    
+    #check if there is no category
+    if len(categories) == 0: return None
         
     scene = Scene(
         main_prompt=prompt,
@@ -43,19 +53,37 @@ def build_category_md(category_name):
     f.write(f'---\nlayout: category\ntitle: {category_name}\n---\n')
     f.close()
 
-def create_category(spark):
+def create_category(app:'TUIApp', item:CheckableListItem):
 
-    def _make_category_file(spark):
-        category_name = spark.get_input()
+    class CreateCategoryProcess(CustomProcess):
+        def __init__(self, app: 'TUIApp', *args) -> None: super().__init__(app, *args)
+        async def main(self):
+            
+            category_name = await self.request_input(
+                InputRequest(prompt='Type your new category name.', hint='new category name', essential=True)
+            )
+            
+            build_category_md(category_name)
+            
+            os.makedirs(f'./_posts/{category_name}')
 
-        build_category_md(category_name)
+            app.alert(f'Successfully created new category:{category_name}.')
+            
+            return await super().main()
+        
+    app.run_custom_process(CreateCategoryProcess(app))
 
-        os.makedirs(f'./_posts/{category_name}')
+    # def _make_category_file(spark):
+    #     category_name = spark.get_input()
 
-        spark.app.alert(f'Successfully created new category:{category_name}.')
+    #     build_category_md(category_name)
 
-    spark.request_input(('Type your new category name.',
-                        'new category name'), callback=_make_category_file)
+    #     os.makedirs(f'./_posts/{category_name}')
+
+    #     spark.app.alert(f'Successfully created new category:{category_name}.')
+
+    # spark.request_input(('Type your new category name.',
+    #                     'new category name'), callback=_make_category_file)
 
 
 def rename_category(spark):

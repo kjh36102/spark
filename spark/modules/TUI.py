@@ -416,6 +416,12 @@ class MainScreen(Screen):
         yield self.contents_container
         yield Footer()
         
+    # def _on_mount(self, event: events.Mount) -> None:
+    #     self.push_scene(
+    #         Scene(items=[CheckableListItem(value='initialize')])
+    #     )
+    #     return super()._on_mount(event)
+        
     # when user press esc on list
     def on_list_container_pop(self, message: ListContainer.Pop):
         self.pop_scene()
@@ -468,7 +474,8 @@ class MainScreen(Screen):
         self.list_container.list.index = scene.current_cursor
         
         #scroll down to previous highlighted item
-        self.list_container.list.highlighted_child.scroll_visible(animate=False)
+        highlighted = self.list_container.list.highlighted_child
+        if highlighted != None: highlighted.scroll_visible(animate=False)
         
     def push_scene(self, scene:Scene):
         try: 

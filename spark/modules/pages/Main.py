@@ -100,14 +100,17 @@ def create_new_post(app:TUIApp, item:CheckableListItem):
         selected_category = item.value
         app.run_custom_process(CreateNewPostProcess(app, selected_category))
     
-    app.push_scene(
-        get_category_list_scene(
-            prompt='Which category do you want to create in?',
-            callback=callback,
-            multi_select=False,
-            )
-        )
-    pass
+    scene = get_category_list_scene(
+        prompt='Which category do you want to create in?',
+        callback=callback,
+        multi_select=False,
+    )
+    
+    #if there is no category
+    if scene == None:
+        app.alert('You have not created any categories yet.', prompt='Error!')
+        pass
+    else: app.push_scene(scene)
 
 def synchronize_post(spark):
     pass
@@ -136,41 +139,3 @@ def change_css_theme(spark):
 
 def initialize_blog(spark):
     pass
-
-# def synchronize_post(spark):
-#     spark.prompt_label.text = ('synchronize_post')
-#     pass
-
-# def commit_and_push(spark):
-#     spark.prompt_label.text = ('commit and push')
-#     pass
-
-# def manage_post(spark):
-#     spark.prompt_label.text = ('manage_post')
-#     pass
-
-# def manage_category(spark:TUIApp):
-#     spark.prompt_label.value = ('manage_category')
-#     spark.push_scene(ManageCategory.get_scene())
-
-# def convert_image_url(spark):
-#     spark.prompt_label.text = ('convert_image_url')
-#     pass
-
-# def revert_image_url(spark):
-#     spark.prompt_label.text = ('revert_image_url')
-#     pass
-
-# import ConfigFTPInfo
-# def config_ftp_info(spark:TUIApp):
-#     spark.push_scene(ConfigFTPInfo.get_scene())
-    
-#     pass
-
-# def change_css_theme(spark):
-#     spark.prompt_label.text = ('config_css_style')
-#     pass
-
-# def initialize_blog(spark):
-#     spark.prompt_label.text = ('initialize blog')
-#     pass
