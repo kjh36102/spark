@@ -44,6 +44,15 @@ class InputContainer(Container):
             self.prompt_container, self.help_doc_container, self.input_box
         )
         
+    class Submitted(Message):
+        def __init__(self, sender: MessageTarget, value) -> None:
+            super().__init__(sender)
+            self.value = value
+            
+    class Aborted(Message):
+        def __init__(self, sender: MessageTarget) -> None:
+            super().__init__(sender)
+        
     async def _on_compose(self) -> None:
         self.hide()
         return await super()._on_compose()
@@ -65,7 +74,7 @@ class InputContainer(Container):
         Binding('escape', 'close_container', 'close', priority=True),
     ]
     
-    def action_close_container(self):
+    async def action_close_container(self):
         self.hide()
     
     def action_expand_input_help(self):
@@ -76,11 +85,14 @@ class InputContainer(Container):
         self.set(self.prompt_origin, self.help_doc_origin, self.input_box.placeholder, preserve_value=True)
         
     async def action_submit_input(self):
-        await self.emit(InputSubmit(self, self.input_box.value))
-        self.input_box.value = ''
+        ret = self.input_box.value
+        self.clear()
+        self.hide()
+        await self.emit(self.Submitted(self, ret))
+        
         
     async def action_abort_input(self):
-        await self.emit(InputAborted(self))
+        await self.emit(self.Aborted(self))
         
     def __set(self, prompt, help_doc, hint, preserve_value=False):
         new_prompt = ReactiveLabel(prompt, indent=1, bold=True)
@@ -146,19 +158,26 @@ class ListContainer(Container):
     def __init__(self, list_view = ListView(Label('Empty list')), multi_select=False) -> None:
         self.list = list_view
         super().__init__(self.list)
-        self.multi_select = multi_select
+        # self.multi_select = multi_select
+        # self.multi_select_items = {}
     
     class Selected(Message):
         def __init__(self, sender: MessageTarget, index, item) -> None:
             super().__init__(sender)
             self.index = index
             self.item = item
-    
+            
     class Pop(Message):
         def __init__(self, sender: MessageTarget) -> None:
             super().__init__(sender)
+            
+    class Submitted(Message):
+        def __init__(self, sender: MessageTarget, children) -> None:
+            super().__init__(sender)
+            self.children = children
         
     BINDINGS = [
+        Binding('enter', 'submit_items', 'submit', key_display='ENTER', priority=True),
         Binding('space', 'select_item', 'select', key_display='SPACE'),
         Binding('escape', 'press_escape', 'back'),
         Binding('pageup', 'scroll_page_up', 'pageup', priority=True),
@@ -170,11 +189,19 @@ class ListContainer(Container):
     async def action_select_item(self):
         idx = self.list.index
         item:CheckableListItem = self.list.children[idx]
+        
+        if self.app.custom_process_stack[-1].is_waiting_input():
+            self.app.custom_process_stack[-1].abort_input()
+            self.app.main_screen.input_container.hide()
+            self.app.main_screen.input_container.clear()
+        
         await self.emit(self.Selected(self, idx, item))
+        
+    async def action_submit_items(self):
+        await self.emit(self.Submitted(self.app, self.list.children))
         
     async def action_press_escape(self):
         await self.emit(self.Pop(self.app))
-        pass
         
     def action_scroll_home(self):
         self.list.index = 0
@@ -185,10 +212,12 @@ class ListContainer(Container):
     def action_scroll_page_up(self):
         unit = int((self.app.size.height - 2) * 0.8)
         self.list.index -= unit
+        # self.list.action_cursor_up()
         
     def action_scroll_page_down(self):
         unit = int((self.app.size.height - 2) * 0.8)
         self.list.index += unit
+        # self.list.action_cursor_down()
         
 
 class LoadingBox(ReactiveLabel):
@@ -410,27 +439,13 @@ class MainScreen(Screen):
         self.list_container = ListContainer()
         self.contents_container = Container(self.input_container, self.list_container)
         self.scene_stack = []
+        self.multi_select_items = {}
 
     def compose(self):
         yield self.prompt
         yield self.contents_container
         yield Footer()
         
-    # def _on_mount(self, event: events.Mount) -> None:
-    #     self.push_scene(
-    #         Scene(items=[CheckableListItem(value='initialize')])
-    #     )
-    #     return super()._on_mount(event)
-        
-    # when user press esc on list
-    def on_list_container_pop(self, message: ListContainer.Pop):
-        self.pop_scene()
-        
-    def on_list_container_selected(self, message: ListContainer.Selected):
-        message.item.callback(self.app, message.item, *message.item.callback_args)
-        
-    async def on_idel(self):
-        self.list_container.styles.height = ((self.app.size.height - 2) - self.input_container.size.height)
         
     BINDINGS = [
         Binding('i', 'toggle_input_container', 'toggle input'),
@@ -483,7 +498,6 @@ class MainScreen(Screen):
             
             #save current cursor if there is scene
             self.scene_stack[-1].current_cursor = self.list_container.list.index
-            # self.app.print('saving index:', self.scene_stack[-1].current_cursor)
         except IndexError: pass
         
         self._change_scene(scene)
@@ -557,7 +571,7 @@ class TUIApp(App):
         self.help_screen = HelpScreen()
         self.alert_screen = AlertScreen()
                 
-        self.custom_process = None
+        self.custom_process_stack = []
 
     def on_mount(self):
         #install main screen
@@ -576,13 +590,32 @@ class TUIApp(App):
         self.push_screen('main')
         pass
     
+    def on_list_container_pop(self, message: ListContainer.Pop):
+        self.pop_custom_process()
+        
+    def on_list_container_selected(self, message: ListContainer.Selected):
+        item:CheckableListItem = message.item
+        
+        if item.show_checkbox: item.toggle_check()
+        else: self.custom_process_stack[-1].response_select((message.index, message.item.value))
+            # self.main_screen.input_container.hide()
+            # self.main_screen.input_container.clear()
+        
+    def on_list_container_submitted(self, message: ListContainer.Submitted):
+        checked = []
+        for idx, child in enumerate(message.children):
+            if child.checked: checked.append((idx, child.value))
+        
+        self.app.custom_process_stack[-1].response_select(checked)
+        
+    def on_input_container_submitted(self, message: InputContainer.Submitted):
+        if self.custom_process_stack[-1] != None: self.custom_process_stack[-1].response_input(message.value)
+    
+    def on_input_container_aborted(self, message: InputContainer.Aborted):
+        if self.custom_process_stack[-1] != None: self.custom_process_stack[-1].abort_input()
+    
     #---------
     
-    def on_input_submit(self, message: InputSubmit):
-        if self.custom_process != None: self.custom_process.response_input(message.value)
-    
-    def on_input_aborted(self, message: InputAborted):
-        if self.custom_process != None: self.custom_process.stop()
         
     def print_log(self, *texts):
         text =' '.join(map(str, texts))
@@ -592,8 +625,14 @@ class TUIApp(App):
         self.logger_screen.logger.clear()
         
     def run_custom_process(self, custom_process):
-        self.custom_process = custom_process
-        self.custom_process.run()
+        if len(self.custom_process_stack) > 0 : self.custom_process_stack[-1].stop()
+        self.custom_process_stack.append(custom_process)
+        self.custom_process_stack[-1].run()
+    
+    def pop_custom_process(self):
+        if len(self.custom_process_stack) > 1:
+            self.custom_process_stack.pop().stop()
+            self.custom_process_stack[-1].run()
         
     def alert(self, text, prompt='Alert'):
         self.alert_screen.set(prompt, text)
@@ -609,3 +648,4 @@ class TUIApp(App):
 if __name__ == '__main__':
     app = TUIApp()
     app.run()    
+

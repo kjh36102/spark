@@ -41,14 +41,12 @@ class CheckableListItem(ListItem):
     check_box = reactive('[ ]')
     value = ReactiveLabel('')
 
-    def __init__(self, value, callback=lambda x, y: x and y, callback_args=(), checked=False, show_checkbox=True) -> None:
+    def __init__(self, value,  checked=False, show_checkbox=False) -> None:
         super().__init__()
 
         self.value = value
         self.checked = checked
         self.show_checkbox = show_checkbox
-        self.callback = self.toggle_check if show_checkbox else callback
-        self.callback_args = callback_args
 
         if checked: self.check_box = self.SYMBOL_CHECK
         

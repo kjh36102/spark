@@ -33,7 +33,7 @@ class Scene:
     def rebuild_items(self):
         new_items = []
         for item in self.items:
-            new_items.append(CheckableListItem(item.value, item.callback, item.callback_args, item.checked, item.show_checkbox))
+            new_items.append(CheckableListItem(item.value, item.checked, item.show_checkbox))
         self.items = new_items
         
 def get_func_names(funcs):
