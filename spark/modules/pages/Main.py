@@ -108,7 +108,7 @@ def manage_post(spark):
     pass
 
 def manage_category(spark:Selector):
-    spark.prompt_label.text = ('manage_category')
+    spark.prompt_label.value = ('manage_category')
     spark.push_scene(ManageCategory.get_scene())
 
 def convert_image_url(spark):

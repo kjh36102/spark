@@ -2,15 +2,18 @@ from textual.app import App, events
 from textual.binding import Binding
 from textual.screen import Screen
 from textual.containers import Container
-from textual.widgets import Label, Footer, ListView, ListItem, TextLog, Input
+from textual.widgets import Label, Footer, ListView, ListItem, TextLog, Input, Button
+from textual.containers import Grid
 from textual.reactive import reactive
 from rich.console import RenderableType
 from textual.color import Color
 from textual.message_pump import messages
 from textual.scrollbar import ScrollDown
+from textual.geometry import Size
 
 from TUI_events import *
-from TUI_DAO import *
+from TUI_DAO import InputRequest, Scene
+from TUI_Widgets import ReactiveLabel, Prompt, CheckableListItem
 
 from enum import Enum, auto
 import time
@@ -30,148 +33,27 @@ DUMMY_SHROT = '''\
 Lorem Ipsum is simply dummy text of the printing and typesetting industry. Lorem Ipsum has been the industry's standard dummy text ever since the 1500s, when an unknown printer took a galley of type and scrambled it to make a type specimen book. It has survived not only five centuries, but also the leap into electronic typesetting, remaining essentially unchanged. It was popularised in the 1960s with the release of Letraset sheets containing Lorem Ipsum passages, and more recently with desktop publishing software like Aldus PageMaker including versions of Lorem Ipsum.\
 '''
 
-class CustomProcess(Thread):
-    def __init__(self, app) -> None:
-        super().__init__()
-        self.app = app
-        self.running_state = False
-        self.response = None
-        
-    def register(self, target, args=()):
-        self.target = target
-        self.args = args
-              
-    def run(self):
-        if self.target != None:
-            self.target(*self.args)
-
-    def start(self):
-        self.running_state = True
-        super().start()
-        return self
-   
-    def stop(self): 
-        thread_id = self.ident
-        res = ctypes.pythonapi.PyThreadState_SetAsyncExc(thread_id, 
-              ctypes.py_object(SystemExit)) 
-        if res > 1: 
-            ctypes.pythonapi.PyThreadState_SetAsyncExc(thread_id, 0) 
-            print('Failed to stop thread with id', thread_id)
-
-    def response_input(self, response):
-        self.response = response
-        
-    def request_input(self, request:InputRequest, polling_interval=0.1):
-        input_container:InputContainer = self.app.main_screen.input_container
-        
-        input_container.set(request.prompt, request.help_doc, request.hint)
-        input_container.show()
-        self.app.set_focus(input_container.input_box)
-
-        self.running_state = False
-        
-        self.app.print('before while')
-
-        while self.response == None: time.sleep(polling_interval)
-
-        self.app.print('after while')
-
-        self.running_state = True
-        
-        ret = self.response
-        self.response = None
-        
-        return ret
-
-class SubmitFlag(Enum):
-    IDLE = auto()
-    SUBMITTED = auto()
-    VALID = auto()
-    INVALID = auto()
-    ABORTED = auto()
-
-
-class ReactiveLabel(Label):
-    value = reactive('')
-    
-    def __init__(self, value, shrink=True) :
-        super().__init__(shrink=shrink)
-        self.set_text(value)
-        
-    def __call__(self, value):
-        self.set_text(value)
-        
-    def set_text(self, value):
-        self.value = value
-    
-    def render(self):
-        return self.value
-
-class Prompt(ReactiveLabel):
-    def __init__(self, value) :
-        super().__init__(value)
-        
-        #styles
-        self.styles.background = '#0053aa'
-        self.styles.width = '100%'
-        self.styles.text_style = 'bold'
-        
-    def render(self):
-        return '  ' + self.value
-    
-class CheckableListItem(ListItem):
-    SYMBOL_UNCHECK = '[ ]'
-    SYMBOL_CHECK = '[+]'
-    check_box = reactive('[ ]')
-    value = ReactiveLabel('')
-
-    def __init__(self, value, checked=False, show_checkbox=True) -> None:
-        super().__init__()
-
-        self.value = value
-        self.checked = checked
-        self.show_checkbox = show_checkbox
-
-        if checked: self.check_box = self.SYMBOL_CHECK
-        
-    def render(self):
-        if self.show_checkbox: return f' {self.check_box}  {self.value}'
-        else: return f' >  {self.value}'
 
 class InputContainer(Container):
     
-    def __init__(self):
-
-        self.prompt_origin = ''
-        self.help_doc_origin = ''
+    def __init__(self, prompt='Empty input prompt', help_doc='Empty input help doc', hint='Empty hint'):
         
-        self.prompt = ReactiveLabel('')
+        self.prompt_origin = prompt
+        self.help_doc_origin = help_doc
+        
+        self.prompt = ReactiveLabel(prompt, indent=1, bold=True)
+        self.help_doc = ReactiveLabel(help_doc, indent=3)
         self.prompt_container = Container(self.prompt)
-        
-        self.help_doc = ReactiveLabel('')
         self.help_doc_container = Container(self.help_doc)
-        
         self.input_box = Input()
-            
-        self.prompt.shrink = self.help_doc.shrink = self.input_box.shrink = True
-        
-        self.prompt_container.styles.overflow_y = self.help_doc_container.styles.overflow_y = 'hidden'
-        
-        self.prompt_container.styles.margin = (0, 1, 0, 1)
-        self.help_doc_container.styles.margin = (0, 1, 0, 3)
-        
-        self.prompt.styles.text_style = 'bold'
-        
-        self.prompt.styles.width = self.help_doc.styles.width = '100%'
+        self.input_box.placeholder = hint
         
         self.state_display = False
         
-        self.resize_flag = False
+        self.expand_state = False
         
         super().__init__(
-            self.prompt_container,
-            self.help_doc_container,
-            self.input_box
+            self.prompt_container, self.help_doc_container, self.input_box
         )
         
     async def _on_compose(self) -> None:
@@ -179,51 +61,79 @@ class InputContainer(Container):
         return await super()._on_compose()
         
     def on_mount(self):
+        self.hide()
         self.prompt_container.styles.height = 1
-        self.help_doc_container.styles.height = 0
+        
         self.set(DUMMY_SHROT, DUMMY_LONG, 'This is input hint')
         
     async def _on_idle(self, event: events.Idle) -> None:
-        if self.resize_flag: 
-            self.resize_flag = False
-            self.resize()
-            self.help_doc_container.styles.display = 'none' if self.help_doc.value == '' else 'block'
+        self.resize()
         return await super()._on_idle(event)
     
-    async def on_resize(self) -> None:
-        self.resize()
+    # async def on_resize(self) -> None:
+    #     self.resize()
         
     BINDINGS = [
         Binding('ctrl+x', 'expand_input_help', 'expand', priority=True),
         Binding('enter', 'submit_input', 'submit', priority=True),
+        Binding('ctrl+z', 'abort_input', 'abort', priority=True),
     ]
     
     def action_expand_input_help(self):
-        help_screen:HelpScreen = self.app.get_screen('help')
+        if self.expand_state == False:
+            self.expand_state = True
+            
+            # self.set(self.prompt_origin, self.help_doc_origin, self.input_box.placeholder)
+        else: 
+            self.expand_state = False
+            
+        self.set(self.prompt_origin, self.help_doc_origin, self.input_box.placeholder, preserve_value=True)
+            # asyncio.ensure_future(self.prompt_container.emit(events.Resize(self.prompt_container, size=Size(1, 1), virtual_size=Size(1, 1))))
+            # asyncio.ensure_future(self.help_doc_container.emit(events.Resize(self.help_doc_container, size=Size(1, 1), virtual_size=Size(1, 1))))
         
-        help_screen.set(
-            'Expanded input help doc',
-            self.prompt_origin,
-            self.help_doc_origin
-            )
+        # self.resize()
+        # self.refresh(layout=True)
         
-        self.app.push_screen(help_screen)
+        pass
+        # help_screen:HelpScreen = self.app.get_screen('help')
+        
+        # help_screen.set(
+        #     'Expanded input help doc',
+        #     self.prompt_origin,
+        #     self.help_doc_origin
+        #     )
+        
+        # self.app.push_screen(help_screen)
         
     async def action_submit_input(self):
         await self.emit(InputSubmit(self, self.input_box.value))
+        self.input_box.value = ''
         
-    def __set(self, prompt, help_doc, hint):
-        self.prompt.value = prompt
-        self.help_doc.value = help_doc
+    async def action_abort_input(self):
+        await self.emit(InputAborted(self))
+        
+    def __set(self, prompt, help_doc, hint, preserve_value=False):
+        new_prompt = ReactiveLabel(prompt, indent=1, bold=True)
+        new_help_doc = ReactiveLabel(help_doc, indent=3)
         self.input_box.placeholder = hint
+      
+        self.prompt.remove()
+        self.help_doc.remove()
         
-        self.resize_flag = True
-    
-    def set(self, prompt, help_doc='', hint=''):
+        self.prompt_container.mount(new_prompt)
+        self.help_doc_container.mount(new_help_doc)
+        
+        self.prompt = new_prompt
+        self.help_doc = new_help_doc
+        
+        if help_doc == '': self.help_doc.styles.display = 'none'
+        if not preserve_value: self.input_box.value = ''
+        
+    def set(self, prompt, help_doc='', hint='', preserve_value=False):
         self.prompt_origin = prompt
         self.help_doc_origin = help_doc
             
-        self.__set(self.prompt_origin, self.help_doc_origin, hint)
+        self.__set(self.prompt_origin, self.help_doc_origin, hint, preserve_value)
 
     def clear(self):
         self.prompt_origin = 'There is no input request.'
@@ -242,32 +152,69 @@ class InputContainer(Container):
         pass
     
     def resize(self):
-        prompt_max_width = self.app.size.width - 2
-        help_doc_max_width = (self.app.size.width - 4) * 2
+        contents_height = self.prompt_container.size.height + self.help_doc_container.size.height + 3
         
-        if len(self.prompt_origin) > prompt_max_width:
-            self.prompt.value = self.prompt_origin[:prompt_max_width - 10] + ' .....'
+        if not self.expand_state:
+            prompt_max_width = self.app.size.width - (self.prompt.indent * 2)
+            help_doc_max_width = (self.app.size.width - (self.help_doc.indent * 2)) * 2
             
-        if len(self.help_doc_origin) > help_doc_max_width:
-            self.help_doc.value = self.help_doc_origin[:help_doc_max_width - 15] + ' .....'
+            if len(self.prompt_origin) > prompt_max_width:
+                self.prompt.value = self.prompt_origin[:prompt_max_width - 10] + ' .....'
+                
+            if len(self.help_doc_origin) > help_doc_max_width:
+                self.help_doc.value = self.help_doc_origin[:help_doc_max_width - 15] + ' .....'
+        
+            # self.prompt_container.styles.height = self.prompt.size.height
+            # self.help_doc_container.styles.height = self.help_doc.size.height
+            # contents_height = self.prompt_container.size.height + self.help_doc_container.size.height + 3
+            self.styles.height = min((self.app.size.height - 2), contents_height)
+        else:
+            self.styles.height = contents_height    
             
-        self.help_doc_container.styles.height = min(2, self.help_doc.size.height)
-        self.styles.height = self.prompt_container.size.height + self.help_doc_container.size.height + 3
+        self.app.print(f'prompt height: {self.prompt.size.height}, doc height: {self.help_doc.size.height}')
+        
+        # self.styles.height = contents_height
+        
+        self.prompt_container.styles.height = 'auto'
+        self.help_doc_container.styles.height = 'auto'
+        
+        # self.styles.height = self.prompt_container.size.height + self.help_doc_container.size.height + 3
         
         
 class ListContainer(Container):
-    def __init__(self, multi_select=False) -> None:
-        self.list = ListView(ListItem(Label('Empty list')))
+    def __init__(self, list_view = ListView(Label('Empty list')), multi_select=False) -> None:
+        # self.list = ListView(ListItem(Label('Empty list')))
+        self.list = list_view
         super().__init__(self.list)
         self.multi_select = multi_select
         
         self.list.styles.min_height = 0
         self.styles.min_height = 0
+
+    class Selected(Message):
+        def __init__(self, sender: MessageTarget, index, item) -> None:
+            super().__init__(sender)
+            self.index = index
+            self.item = item
+    
+    class Pop(Message):
+        def __init__(self, sender: MessageTarget) -> None:
+            super().__init__(sender)
         
-    def push_list(self, items):
-        self.list.clear()
-        for item in items:
-            self.list.append(CheckableListItem(value=item, show_checkbox=self.multi_select))
+    BINDINGS = [
+        Binding('space', 'select_item', 'select', key_display='SPACE'),
+        Binding('escape', 'press_escape', 'pop'),
+    ]
+        
+    async def action_select_item(self):
+        idx = self.list.index
+        item:CheckableListItem = self.list.children[idx]
+        
+        self.app.print('select posted?', await self.emit(self.Selected(self, idx, item))) 
+        
+    async def action_press_escape(self):
+        self.app.print('escape posted?', await self.emit(self.Pop(self.app))) 
+        
 
 class LoadingBox(ReactiveLabel):
     def __init__(self, ratio=0, msg=''):
@@ -320,17 +267,14 @@ class HelpScreen(Screen):
     
     def compose(self):
         yield self.prompt
-        # yield self.contents_container
         yield Footer()
         
     def on_mount(self):
         self.set('Empty help prompt.', 'Empty help title.', 'Empty help doc.')
         
-        
     async def _on_resize(self, event: events.Resize) -> None:
         self.resize()
         return await super()._on_resize(event)
-        
         
     BINDINGS = [
         Binding('escape', 'pop_screen()', 'back'),
@@ -416,16 +360,35 @@ class HelpScreen(Screen):
         self.prompt.value = ''
         self.help_title.value = ''
         self.help_doc.value = ''
+
+class FormContainer(Container):
+    def __init__(self, *children):
+        super().__init__(*children)
         
+        self.styles.width = '100%'
+        self.styles.height = self.app.size.height - 2        
+
 class FormScreen(Screen):
-    pass
+    def __init__(self, name: str | None = None, id: str | None = None, classes: str | None = None) -> None:
+        super().__init__(name, id, classes)
+        
+        self.prompt = Prompt('Empty prompt.')
+        self.form_container = FormContainer(
+            InputContainer()
+        )
+        
+    def compose(self):
+        yield self.prompt
+        yield self.form_container
+        yield Footer()
+    
 
 class LoggerScreen(Screen):
     def __init__(self, name: str | None = None, id: str | None = None, classes: str | None = None) -> None:
         super().__init__(name, id, classes)
         
         self.prompt = Prompt('Empty prompt.')
-        self.logger = TextLog(max_lines=200)
+        self.logger = TextLog(max_lines=200, wrap=True)
         self.loading_box = LoadingBox()
         
     def compose(self):
@@ -494,7 +457,7 @@ class MainScreen(Screen):
         self.help_title = 'Empty help title.'
         self.help_doc = 'Empty help doc.'
         
-        self.custom_process = None
+        self.scene_stack = []
 
     def compose(self):
         yield self.prompt
@@ -503,19 +466,36 @@ class MainScreen(Screen):
         yield Footer()
     
     def on_mount(self):
-        self.list_container.push_list([f'hi{i}' for i in range(50)])
+        # self.list_container.push_list([f'hi{i}' for i in range(30)])
+
+        def change_prompt_callback(app, item):
+            app.main_screen.prompt.value = item.value
+
+        scene = Scene(
+            main_prompt='메인씬',
+            items=[CheckableListItem(f'main{i}', callback=change_prompt_callback, show_checkbox=False) for i in range(30)],
+            help_prompt='메인헬프 프롬프트',
+            help_title='메인 헬프 타이틀',
+            help_doc='메인 헬프 문서',
+        )
+        
+        self.push_scene(scene)
+        pass
     
-    def on_input_submit(self, message: InputSubmit):
-        # self.submit_flag = SubmitFlag.SUBMITTED
-        # self.prompt.value = message.value
-        self.custom_process.response_input(message.value) 
-        # self.input_container.clear()
+    # when user press esc on list
+    def on_list_container_pop(self, message: ListContainer.Pop):
+        self.app.print('press escape called')
+        self.pop_scene()
+        
+    def on_list_container_selected(self, message: ListContainer.Selected):
+        self.app.print('on_list_selected handler called')
+        message.item.callback(self.app, message.item, *message.item.callback_args)
         
     BINDINGS = [
-        Binding('h', 'open_help', 'open help'),
-        Binding('l', 'push_screen("logger")', 'open logger'),
+        Binding('r', 'release_focus', 'back'),
         Binding('i', 'toggle_input_container', 'toggle input'),
-        Binding('escape', 'release_focus', 'back'),
+        Binding('l', 'push_screen("logger")', 'open logger'),
+        Binding('h', 'open_help', 'open help'),
     ]
     
     def action_open_help(self):
@@ -532,12 +512,104 @@ class MainScreen(Screen):
             
     def action_release_focus(self):
         self.app.set_focus(None)
+        
+    def _change_scene(self, scene:Scene):
+        #change prompts and help doc
+        self.prompt.value = scene.main_prompt
+        help_screen:HelpScreen = self.app.help_screen
+        help_screen.set(scene.help_prompt, scene.help_title, scene.help_doc)
+        
+        #remove current list
+        self.list_container.list.remove()
+        
+        #build new list
+        scene.rebuild_items()   #This is required because widgets that have been removed once cannot be remounted
+        self.list_container.list = ListView(*scene.items)
+        
+        #mount new list
+        self.list_container.mount(self.list_container.list)
+        
+        #set focus to list view
+        self.app.set_focus(self.list_container.list)
+        
+        #restore cursor        
+        self.list_container.list.index = scene.current_cursor
+        
+        #scroll down to previous highlighted item
+        self.list_container.list.highlighted_child.scroll_visible(animate=False)
+        
+    def push_scene(self, scene:Scene):
+        try: 
+            if self.scene_stack[-1] is scene: return
+            
+            #save current cursor if there is scene
+            self.scene_stack[-1].current_cursor = self.list_container.list.index
+            self.app.print('saving index:', self.scene_stack[-1].current_cursor)
+            
+        except IndexError: pass
+        
+        self._change_scene(scene)
+        self.scene_stack.append(scene)
+        self.app.print('current stack num:', len(self.scene_stack))
+    
+    def pop_scene(self):
+        if len(self.scene_stack) >= 2:
+            self.scene_stack.pop()
+            self.app.print('current stack num:', len(self.scene_stack))
+            self._change_scene(self.scene_stack[-1])
+   
 
-    def run_custom_process(self, custom_process:CustomProcess):
-        self.custom_process = custom_process
-        self.custom_process.start()
+class AlertScreen(Screen):
+    BINDINGS = [
+        Binding('space', 'space', 'OK', key_display='SPACE', priority=True),
+        Binding('enter', 'enter', '', show=False, priority=True),
+        Binding('escape', 'escape', '', show=False, priority=True),
+    ]
 
+    def action_space(self):
+        self.button.press()
+    
+    def action_enter(self):
+        self.button.press()
+        
+    def action_escape(self):
+        self.button.press()
 
+    def __init__(self, name: str | None = None, id: str | None = None, classes: str | None = None) -> None:
+        super().__init__(name, id, classes)
+
+        self.prompt = Prompt('Alert')
+        self.label = ReactiveLabel("Empty contents")
+        self.button = Button("OK", variant="primary", id='ok_btn')
+        self.grid = Grid(self.label, self.button)
+
+        self.grid.styles.grid_size_columns = 1
+        self.grid.styles.grid_gutter_horizontal = 2
+        self.grid.styles.grid_gutter_vertical = 1
+
+        self.label.styles.background = None
+        self.label.styles.width = '100%'
+        self.label.styles.height = '100%'
+        self.label.styles.content_align = ('center', 'bottom')
+
+        self.button.styles.content_align = ('center', 'bottom')
+        self.button.styles.width = 10
+
+    def compose(self):
+        yield self.prompt
+        yield self.grid
+        yield Footer()
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        self.app.pop_screen()
+
+    async def _on_resize(self, event: events.Resize) -> None:
+        self.button.styles.margin = (0, 0, 0, int(((self.app.size.width) - self.button.size.width) / 2))
+        return await super()._on_resize(event)
+    
+    def set(self, prompt, text):
+        self.prompt.value = prompt
+        self.label.value = text
 
 class TUIApp(App):
     
@@ -546,9 +618,10 @@ class TUIApp(App):
         self.main_screen = MainScreen()
         self.logger_screen = LoggerScreen()
         self.help_screen = HelpScreen()
-        
-        # self.submit_flag = SubmitFlag.IDLE
-        
+        self.alert_screen = AlertScreen()
+                
+        self.custom_process = None
+
     def on_mount(self):
         #install main screen
         self.install_screen(self.main_screen, name='main')
@@ -561,42 +634,34 @@ class TUIApp(App):
         
         #install form screen
         
+        #install alert screen
+        self.install_screen(self.alert_screen, name='alert')
+        
         #push main screen
         self.push_screen('main')
         pass
     
+    #---------
     
+    def on_input_submit(self, message: InputSubmit):
+        if self.custom_process != None: self.custom_process.response_input(message.value)
+    
+    def on_input_aborted(self, message: InputAborted):
+        if self.custom_process != None: self.custom_process.stop()
+        
     def print(self, *texts):
-        text =' '.join(texts)
+        text =' '.join(map(str, texts))
         self.logger_screen.print(text)
+        
+    def run_custom_process(self, custom_process):
+        self.custom_process = custom_process
+        self.custom_process.run()
+        
+    def alert(self, prompt, *texts):
+        text = ' '.join(map(str, texts))
+        self.alert_screen.set(prompt, text)
+        self.push_screen(self.alert_screen)
     
-    
-    # def request_input(self, request:InputRequest, valid_checker=(lambda x: True), valid_checker_args=(), polling_interval=0.1):
-    #     main_screen:MainScreen = self.get_screen('main')
-    #     input_container:InputContainer = main_screen.input_container
-        
-    #     input_container.set(request.prompt, request.help_doc, request.hint)
-    #     main_screen.action_toggle_input_container()
-    #     self.set_focus(input_container.input_box)
-
-    #     ret = (self.submit_flag, None)
-    #     while True:
-    #         if self.submit_flag == SubmitFlag.SUBMITTED:
-    #             submit_value = input_container.input_box.value
-    #             msg = valid_checker(submit_value, *valid_checker_args)
-    #             if msg == True: ret = (SubmitFlag.VALID, submit_value)
-    #             else: ret = (SubmitFlag.INVALID, msg)
-    #             break
-    #         elif self.submit_flag == SubmitFlag.ABORTED:
-    #             input_container.clear()
-    #             ret = (SubmitFlag.ABORTED, None)
-    #             break
-    #         time.sleep(polling_interval)
-            
-        
-    #     self.submit_flag = SubmitFlag.IDLE
-    #     return ret
-        
 
 if __name__ == '__main__':
     app = TUIApp()

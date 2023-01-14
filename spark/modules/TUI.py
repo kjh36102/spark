@@ -31,11 +31,11 @@ class CheckableListItem(ListItem):
         else: return f' >  {self.str}'
         
 class ReactiveLabel(Label):
-    text = reactive('')
+    value = reactive('')
 
     def __init__(self, text, classes=None, id=None, shrink=True, indent=True) -> None:
         super().__init__(classes=classes, id=id, shrink=shrink)
-        self.text = text
+        self.value = text
 
         #styles
         self.styles.background = '#0053aa'
@@ -44,7 +44,7 @@ class ReactiveLabel(Label):
         self.indent = indent
 
     def render(self) -> str:
-        return ('  ' if self.indent else '') + self.text
+        return ('  ' if self.indent else '') + self.value
 
 class TUIScreen(Screen):
     BINDINGS = [
@@ -229,7 +229,7 @@ class TUIScreen(Screen):
 
     def alert_line(self, text, time=3):
         def __alert(self:TUIScreen, text, time):
-            self.prompt_label.text = text
+            self.prompt_label.value = text
             sleep(time)
             self.refresh_prompt()
 
@@ -238,7 +238,7 @@ class TUIScreen(Screen):
         th.start()
 
     def refresh_prompt(self):
-        self.prompt_label.text = self.help_prompt_str if self.state_show_help else self.main_prompt_str
+        self.prompt_label.value = self.help_prompt_str if self.state_show_help else self.main_prompt_str
         
 
 # ------------------------------------------------------------------------------------------------
@@ -275,7 +275,7 @@ class TUIScreen(Screen):
             self.input_box.styles.display = 'block'
             self.input_last_focused = self.app.focused
             self.app.set_focus(self.input_box)
-            self.prompt_label.text = self.input_prompt_str
+            self.prompt_label.value = self.input_prompt_str
             self.input_box.placeholder = self.input_placeholder 
 
         elif self.state_show_input == True and close:
