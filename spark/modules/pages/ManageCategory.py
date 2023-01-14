@@ -1,6 +1,8 @@
 import shutil
 import os
-from TUI import Scene, Selector, get_func_names
+# from TUI import Scene, Selector, get_func_names
+from TUI_DAO import Scene, get_func_names
+from TUI_Widgets import CheckableListItem
 import sys
 sys.path.append('./spark/modules/')
 
@@ -16,24 +18,22 @@ def get_scene():
 
     scene = Scene(
         main_prompt='Manage Category',
-        contents=func_names,
-        callbacks=funcs,
+        items=[CheckableListItem(func_name, func, show_checkbox=False) for func_name, func in zip(func_names, funcs)]
     )
 
     return scene
 
 
-def get_category_list_scene(prompt='Please select category.', multi_select=False):
-    contents = [filename.split('.')[0]
+def get_category_list_scene(prompt='Please select category.', callback=lambda x, y:x and y, callback_args=(), multi_select=False):
+    categories = [filename.split('.')[0]
                 for filename in os.listdir('./category/')]
     
-    try: contents.remove('uncategorized')
+    try: categories.remove('uncategorized')
     except ValueError: build_category_md('uncategorized')
         
     scene = Scene(
         main_prompt=prompt,
-        contents=contents,
-        multi_select=multi_select
+        items=[CheckableListItem(value=category, callback=callback, callback_args=callback_args, show_checkbox=multi_select) for category in categories]
     )
 
     return scene
@@ -43,9 +43,9 @@ def build_category_md(category_name):
     f.write(f'---\nlayout: category\ntitle: {category_name}\n---\n')
     f.close()
 
-def create_category(spark: Selector):
+def create_category(spark):
 
-    def _make_category_file(spark: Selector):
+    def _make_category_file(spark):
         category_name = spark.get_input()
 
         build_category_md(category_name)
@@ -58,10 +58,10 @@ def create_category(spark: Selector):
                         'new category name'), callback=_make_category_file)
 
 
-def rename_category(spark: Selector):
+def rename_category(spark):
     spark.push_scene(get_category_list_scene())
 
-    def select_callback(spark: Selector):
+    def select_callback(spark):
         item = spark.get_selected_items()
         # TODO 카테고리 이름 바꾸면서 포스팅 카테고리도 같이 변경하기
 
@@ -80,13 +80,13 @@ def change_category(filepath, category_name):
     
 
 
-def delete_category(spark: Selector):
+def delete_category(spark):
     spark.push_scene(get_category_list_scene(
         prompt='Which category do you want to delete?'))
     
     dup_list = [child.str for child in spark.contents_listview.children]
     
-    def alert_selected(spark:Selector, dup_list):
+    def alert_selected(spark, dup_list):
         idx, item = spark.get_selected_items()
         spark.app.alert(f'selected: {idx}, {dup_list[idx]}')
         
@@ -97,7 +97,7 @@ def delete_category(spark: Selector):
     
     spark.set_select_callback(alert_selected, callback_args=(dup_list,), reuse=True)
 
-    # def select_callback(spark: Selector):
+    # def select_callback(spark):
     #     selected_idx, selected_category = spark.get_selected_items()
     #     sure_string = f"Yes I'm sure for {selected_category}"
 
@@ -108,7 +108,7 @@ def delete_category(spark: Selector):
     #         f'Type "{sure_string}" to proceed.'
     #     )
 
-    #     def request_callback(spark: Selector):
+    #     def request_callback(spark):
     #         typed = spark.get_input()
             
     #         category_path = f'./_posts/{selected_category}'

@@ -2,9 +2,12 @@ import sys
 sys.path.append('./spark/modules/')
 sys.path.append('./spark/modules/pages/')
 
-from pages import ManageCategory
+from TUI import TUIApp
+from TUI_DAO import Scene, get_func_names, InputRequest
+from TUI_Widgets import CheckableListItem
+from TUI_events import CustomProcess
 
-from TUI import Scene, Selector, get_func_names
+from pages import ManageCategory
 from ManageCategory import get_category_list_scene
 
 from datetime import datetime
@@ -42,32 +45,34 @@ initialize blog - After clone from github, must run this once.\
 
     scene = Scene(
         main_prompt='Welcome to Spark!',
-        contents=func_names,
-        callbacks=funcs,
-        callbacks_args=[()for _ in range(len(funcs))],
-        help_doc=help,
+        items=[CheckableListItem(value=func_name, callback=func, show_checkbox=False) for func_name, func in zip(func_names, funcs)],
+        help_title='Index description',
+        help_doc=help
     )
 
     return scene
 
-
-def create_new_post(spark:Selector):
-    spark.push_scene(get_category_list_scene(prompt='Which category do you want to create in?'))
-
-    def select_callback(spark:Selector):
-        _, category_name = spark.get_selected_items()
-
-        prompt_list = [
-            ("Type new post's title", 'post title'),
-            ('Use comments?','y or n (default: y)'),
-            ('Type tag list with commas(,)', 'ex) IT, Python, Blogging')
-        ]    
-
-        def __create_post(spark:Selector):
-            inputs = spark.get_input(len(prompt_list))
-
-            post_title, post_comments, post_tags = inputs
-
+def create_new_post(app:TUIApp, item:CheckableListItem):
+    
+    class CreateNewPostProcess(CustomProcess):
+        def __init__(self, app: TUIApp, *args): super().__init__(app, *args)
+        async def main(self):
+            category_name = self.args[0]
+            
+            post_title = await self.request_input(
+                InputRequest(prompt="Type new post's title", hint="new post's title", essential=True))
+            
+            post_comments = await self.request_input(
+                InputRequest(prompt='Use comments?', help_doc="default: y", hint='y or n'))
+            
+            post_tags =  await self.request_input(
+                InputRequest(
+                    prompt='Type tage list',
+                    help_doc='Type tag list seperated with comma(,). ex) IT, Python, Blogging',
+                    hint='tags with comma'
+                    )
+            )
+            
             #base파일 불러오기
             f = open('./spark/post_base.md', 'r', encoding='utf-8')
             base_raw = ''.join(f.readlines())
@@ -80,7 +85,6 @@ def create_new_post(spark:Selector):
             base_raw = base_raw.replace('post_tags', post_tags)
             base_raw = base_raw.replace('post_contents', f'generated at {datetime.now()}')
 
-
             #category폴더에 파일 생성하기
             post_dir = f'./_posts/{category_name}/{post_title}'
             post_file_path = f'{post_dir}/{post_title}.md'
@@ -88,47 +92,85 @@ def create_new_post(spark:Selector):
             f = open(post_file_path, 'w', encoding='utf-8')
             f.write(base_raw)
 
-            spark.app.alert(f'Succefully created new post: {post_file_path}')
+            app.alert(f'Succefully created new post: {post_file_path}')
             
-        spark.request_input(prompt=prompt_list, callback=__create_post)
-        
-    spark.set_select_callback(select_callback, reuse=True)
+            return await super().main()
+    
+    def callback(app:TUIApp, item:CheckableListItem):
+        selected_category = item.value
+        app.run_custom_process(CreateNewPostProcess(app, selected_category))
+    
+    app.push_scene(
+        get_category_list_scene(
+            prompt='Which category do you want to create in?',
+            callback=callback,
+            multi_select=False,
+            )
+        )
     pass
 
 def synchronize_post(spark):
-    spark.prompt_label.text = ('synchronize_post')
     pass
 
 def commit_and_push(spark):
-    spark.prompt_label.text = ('commit and push')
     pass
 
 def manage_post(spark):
-    spark.prompt_label.text = ('manage_post')
     pass
 
-def manage_category(spark:Selector):
-    spark.prompt_label.value = ('manage_category')
-    spark.push_scene(ManageCategory.get_scene())
+def manage_category(app:TUIApp, item:CheckableListItem):
+    app.push_scene(ManageCategory.get_scene())
+    pass
 
 def convert_image_url(spark):
-    spark.prompt_label.text = ('convert_image_url')
     pass
 
 def revert_image_url(spark):
-    spark.prompt_label.text = ('revert_image_url')
     pass
 
-import ConfigFTPInfo
-def config_ftp_info(spark:Selector):
-    spark.push_scene(ConfigFTPInfo.get_scene())
-    
+def config_ftp_info(spark:TUIApp):
     pass
 
 def change_css_theme(spark):
-    spark.prompt_label.text = ('config_css_style')
     pass
 
 def initialize_blog(spark):
-    spark.prompt_label.text = ('initialize blog')
     pass
+
+# def synchronize_post(spark):
+#     spark.prompt_label.text = ('synchronize_post')
+#     pass
+
+# def commit_and_push(spark):
+#     spark.prompt_label.text = ('commit and push')
+#     pass
+
+# def manage_post(spark):
+#     spark.prompt_label.text = ('manage_post')
+#     pass
+
+# def manage_category(spark:TUIApp):
+#     spark.prompt_label.value = ('manage_category')
+#     spark.push_scene(ManageCategory.get_scene())
+
+# def convert_image_url(spark):
+#     spark.prompt_label.text = ('convert_image_url')
+#     pass
+
+# def revert_image_url(spark):
+#     spark.prompt_label.text = ('revert_image_url')
+#     pass
+
+# import ConfigFTPInfo
+# def config_ftp_info(spark:TUIApp):
+#     spark.push_scene(ConfigFTPInfo.get_scene())
+    
+#     pass
+
+# def change_css_theme(spark):
+#     spark.prompt_label.text = ('config_css_style')
+#     pass
+
+# def initialize_blog(spark):
+#     spark.prompt_label.text = ('initialize blog')
+#     pass

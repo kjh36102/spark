@@ -41,7 +41,7 @@ class CheckableListItem(ListItem):
     check_box = reactive('[ ]')
     value = ReactiveLabel('')
 
-    def __init__(self, value, callback=lambda x:x, callback_args=(), checked=False, show_checkbox=True) -> None:
+    def __init__(self, value, callback=lambda x, y: x and y, callback_args=(), checked=False, show_checkbox=True) -> None:
         super().__init__()
 
         self.value = value

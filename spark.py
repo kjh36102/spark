@@ -2,58 +2,19 @@ import sys
 sys.path.append('./spark/modules/')
 sys.path.append('./spark/pages/')
 
-from TUI import Selector, AlertScreen, App, Scene
+from TUI import TUIApp
 from pages import Main
 
-# class Spark(App):
-#     def on_mount(self):
-#         self.install_screen(Selector(), 'selector')
-#         self.install_screen(AlertScreen(), 'alert')
-#         self.push_screen('selector')
-
-#     def on_ready(self):
-#         self.main()
-
-#     def main(self):
-#         selector:Selector = self.screen
-#         selector.push_scene(Main.get_scene())
-    
-#     def alert(self, text):
-#         self.push_screen('alert')
-#         self.screen.label.text = str(text)
-#         self.app.set_focus(self.screen.button)
-#         selector:Selector = self.get_screen('selector')
-#         selector.refresh_prompt()
-
-# spark = Spark()
-# spark.run()
-
-
-
-class Test(App):
-    def on_mount(self):
-        self.install_screen(Selector(), 'selector')
-        self.install_screen(AlertScreen(), 'alert')
-        self.push_screen('selector')
-
+class Spark(TUIApp):
+    def __init__(self):
+        super().__init__()
+        
     def on_ready(self):
         self.main()
-
-    def main(self):
-        # selector:Selector = self.screen
-        # selector.push_scene(Main.get_scene())
         
-        Scene(
-            contents=['test1', 'test2', 'test3', 'test4'],
-            
-        )
-    
-    def alert(self, text):
-        self.push_screen('alert')
-        self.screen.label.text = str(text)
-        self.app.set_focus(self.screen.button)
-        selector:Selector = self.get_screen('selector')
-        selector.refresh_prompt()
+    def main(self):
+        self.push_scene(Main.get_scene())
 
-test = Test()
-test.run()
+if __name__ == '__main__':
+    spark = Spark()
+    spark.run()
