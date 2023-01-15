@@ -3,13 +3,13 @@ sys.path.append('./spark/modules/')
 sys.path.append('./spark/modules/pages/')
 
 from TUI import TUIApp
-from TUI_DAO import Scene, InputRequest, get_func_names
-from TUI_events import CustomProcess
+from TUI_DAO import get_func_names
+from TUI_events import CustomProcess, Scene, InputRequest
 from TUI_Widgets import CheckableListItem
 
 class ConfigFTPInfoProcess(CustomProcess):
-    def __init__(self, app: 'TUIApp', *args) -> None:
-        super().__init__(app, *args)
+    def __init__(self, app: 'TUIApp') -> None:
+        super().__init__(app)
         
         self.funcs = [
             self.see_config_info,
@@ -19,21 +19,20 @@ class ConfigFTPInfoProcess(CustomProcess):
         func_names = get_func_names(self.funcs)
         
         self.scene = Scene(
-            items=[CheckableListItem(func_name) for func_name in func_names]
+            items=func_names
         )
         
     async def main(self):
-        while True:
-            idx, val = await self.request_select(self.scene)
-            
-            await self.run(self.funcs[idx]())
-        return await super().main()
+        self.app.print_log('after run')
+        
+        idx, val = await self.request_select(self.scene)
+        await self.funcs[idx]()
     
-    async def see_config_info(process:CustomProcess, app:TUIApp):
-        await see_config_info(process, app)
+    async def see_config_info(self):
+        await see_config_info(self, self.app)
     
-    async def reconfigure(process:CustomProcess, app:TUIApp):
-        await reconfigure(process, app)
+    async def reconfigure(self):
+        await reconfigure(self, self.app)
         
 #---------------------------------------------------------------------
 

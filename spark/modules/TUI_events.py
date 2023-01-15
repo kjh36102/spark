@@ -10,169 +10,119 @@ from TUI_DAO import InputRequest, Scene
 import asyncio
 from pyautogui import press
 
+class InputRequest:
+    def __init__(self, prompt, desc='', hint='', default=None, password=False, prevalue=''):
+        self.prompt = prompt
+        self.desc = desc
+        self.hint = hint
+        self.default = default
+        self.password = password
+        self.prevalue = prevalue
+        
+class Scene:
+    def __init__(self, items, main_prompt='Select what you want', help_prompt='Show Help Doc', help_title='', help_doc='', multi_select=False) -> None:
+        self.items = items
+        self.main_prompt = main_prompt
+        self.help_prompt = help_prompt
+        self.help_title = help_title
+        self.help_doc = help_doc
+        self.multi_select = multi_select
+    
 class CustomProcess:
-    '''Create your own process runs inside TUIApp.
-    
-    You can inherit this class to create your own process that runs inside TUIApp.
-    You should override native coroutine `async def main()`
-    
-    Example::
-
-        class YourCustomProcess(self):
-            def __init__(self, app):
-                super().__init__(app)
-            
-            #overrided
-            async def main(self):
-                received_input_value = await self.request_input(InputRequest(
-                    prompt='Change the prompt.',
-                    help_doc='You can change the prompt value with your inputs.',
-                    hint='any text'
-                ))
-                
-                #do_something_with_received
-                
-                return await super().main() #this is necessary
-                
-    And inside of the TUIApp for run main()
-    
-    Example::
-
-        BINDINGS = [
-            Binding('ctrl+a', 'test', 'run action_test()'),
-        ]
-
-        def action_test(self):
-            self.run_custom_process(YourCustomProcess(self))
-            
-
-    '''
-    class AbortedException(Exception):
-        pass
-    
-    class SubScenePopRequest(Exception):
-        pass
-    
-    def __init__(self, app: 'TUIApp', *args) -> None:
+    def __init__(self, app) -> None:
         self.app = app
-        self.args = args
-        self.__current_coroutine = None
-        self.__response_input = None
-        self.__response_select = None
-        self.__abort_flag = False
-        self.__waiting_input_flag = False
-        self.return_from_child = None
-        # self.subscene_stack = []
+        self.__received_input_value = None
+        self.__received_select_items = None
+        self.__abort_input_flag = False
+        self.__abort_select_flag = False
+        self.is_waiting_input = False
+        self.is_waiting_select = False
+        self.is_running = False
         
-    
-    async def main(self):
-        self.stop()
+    async def main(self): pass    
         
-    def start(self, force=False):
-        if self.__current_coroutine == None or force:
-            self.__current_coroutine = self.main()
-            asyncio.ensure_future(self.__current_coroutine)
-    
-    # def pop_subscene(self):
-    #     self.app.push_scene(self.subscene_stack.pop())
-    
-    def stop(self):
-        async def _stop():
-            self.__current_coroutine.close()
-            self.__current_coroutine = None
-            
-        if self.__current_coroutine != None: 
-            asyncio.ensure_future(_stop())
-            
-    def is_running(self):
-        return True if self.__current_coroutine != None else False
-    
-    def is_waiting_input(self):
-        return self.__waiting_input_flag
-            
-    def response_input(self, response):
-        if self.__current_coroutine != None: self.__response_input = response
-    
-    async def request_input(self, request:'InputRequest', polling_interval=0.05):
-        '''
-        run with await
-        return user input
-        '''
-        input_container:'InputContainer' = self.app.main_screen.input_container
+    async def __run(self):
+        try:
+            while True: 
+                try: await self.main()
+                except self.InputAborted: self.app.clear_input()
+        except self.Return as ret:
+            return ret.value
         
-        input_container.set(request.prompt, request.help_doc, request.hint, password=request.password, previous=request.previous)
-        input_container.show()
-        # self.app.set_focus(input_container.input_box)
-        
-        press(['space', 'backspace']) #use pyautogui for refresh input box
+    def run(self):
+        if not self.is_running:
+            asyncio.ensure_future(self.__run())
 
-        while True:
-            self.__waiting_input_flag = True
-            # self.app.print_log('waiting flag set true')
-            while self.__response_input == None: 
-                if self.__abort_flag:
-                    self.__abort_flag = False
-                    self.__waiting_input_flag = False
-                    raise self.AbortedException
-                await asyncio.sleep(polling_interval)
+    def response_input(self, value:str):
+        self.__received_input_value = value
+        
+    def response_select(self, items:dict):
+        self.__received_select_items = items
+        
+    def abort_input(self):
+        self.__abort_input_flag = True
+        
+    def abort_select(self):
+        self.__abort_select_flag = True
+        
+    def exit(self, value):
+        raise self.Return(value)
+    
+    async def request_input(self, input_request:InputRequest, polling_rate=0.05):
+        #set input layout and open container
+        asyncio.ensure_future(self.app.set_input(input_request))
+        self.app.open_input()
                 
-            if request.essential: 
-                if self.__response_input == '': self.__response_input = None; continue
-                else: break
-            else:
-                if self.__response_input == '': self.__response_input = request.default
-                break
-
-        ret = self.__response_input
-        self.__response_input = None
-        self.__waiting_input_flag = False
+        #wait until user input
+        self.is_waiting_input = True
+        while self.__received_input_value == None:
+            
+            #check aborted
+            if self.__abort_input_flag == True:
+                self.__abort_input_flag = False
+                self.is_waiting_input = False
+                raise self.InputAborted
+            
+            await asyncio.sleep(polling_rate)
+        
+        #make return
+        ret = self.__received_input_value
+        self.__received_input_value = None
+        self.is_waiting_input = False
         
         return ret
     
-    def response_select(self, response):
-        if self.__current_coroutine != None: self.__response_select = response
-        
-    async def abort_input(self):
-        if self.__current_coroutine != None:
-            self.__abort_flag = True
-    
-    async def request_select(self, scene:Scene, polling_interval=0.05):
-        '''
-        run with await
-        return idx, val
-        '''
-        
+    async def request_select(self, scene, polling_rate=0.05):
+        #update TUI with given scene
         self.app.push_scene(scene)
         
-        while self.__response_select == None: await asyncio.sleep(polling_interval)
+        # await self.app.set_scene(scene)
         
-        ret = self.__response_select
-        self.__response_select = None
-        
-        return ret
-    
-    async def request_from_child(self, subprocess:CustomProcess, polling_interval=0.05):
-        
-        self.app.run_custom_process(subprocess)
-        
-        while self.return_from_child == None: await asyncio.sleep(polling_interval)
-        
-        ret = self.return_from_child
-        self.return_from_child = None
-        
-        return ret
-
-    def return_to_parent(self, value):
-        self.app.custom_process_stack[-2].return_from_child = value
-        self.app.pop_custom_process()
-    
-    async def run(self, target, args=()):
-        try:
-            coro = target(self, self.app, *args)
-        
-            if type(coro) == CoroutineType:
-                self.app.print_log('run coro')
-                coro = await coro
+        #wait until user select or submit
+        self.is_waiting_select = True
+        while self.__received_select_items == None:
             
-            return coro
-        except self.AbortedException: pass
+            #check aborted
+            if self.__abort_select_flag == True:
+                self.__abort_select_flag = False
+                self.is_waiting_select = False
+                self.exit(None)
+            
+            await asyncio.sleep(polling_rate)
+            
+        #make return
+        ret = self.__received_select_items
+        self.__received_select_items = None
+        self.is_waiting_select = False
+    
+        return ret
+    
+    class InputAborted(Exception): pass
+    class Return(Exception): 
+        def __init__(self, value):
+            super().__init__()
+            self.value = value
+    
+    
+        
+    

@@ -7,7 +7,7 @@ from textual.containers import Grid
 from textual.message import Message, MessageTarget
 
 from TUI_events import *
-from TUI_DAO import *
+# from TUI_DAO import *
 from TUI_Widgets import ReactiveLabel, Prompt, CheckableListItem
 
 from pyautogui import press
@@ -163,7 +163,7 @@ class InputContainer(Container):
         self.help_doc_container.styles.height = 'auto'
         
 class ListContainer(Container):
-    def __init__(self, list_view = ListView(Label('Empty list')), multi_select=False) -> None:
+    def __init__(self, list_view = ListView(), multi_select=False) -> None:
         self.list = list_view
         super().__init__(self.list)
     
@@ -473,14 +473,15 @@ class MainScreen(Screen):
         self.app.help_screen.set(scene.help_prompt, scene.help_title, scene.help_doc)
         
         #save current cursor
-        cursor = self.list_container.list.index
+        cursor = 0 if self.list_container.list.index == None else self.list_container.list.index
         
         #remove current list
         self.list_container.list.remove()
         
         #build new list
-        scene.rebuild_items()   #This is required because widgets that have been removed once cannot be remounted
-        self.list_container.list = ListView(*scene.items)
+        # scene.rebuild_items()   #This is required because widgets that have been removed once cannot be remounted
+        items = [CheckableListItem(value=item, show_checkbox=scene.multi_select) for item in scene.items]
+        self.list_container.list = ListView(*items)
         
         #mount new list
         self.list_container.mount(self.list_container.list)
@@ -497,23 +498,6 @@ class MainScreen(Screen):
         #scroll down to previous highlighted item
         highlighted = self.list_container.list.highlighted_child
         if highlighted != None: highlighted.scroll_visible(animate=False)
-        
-    # def _push_scene(self, scene:Scene):
-    #     # try: 
-    #     # #     if self.scene_stack[-1] is scene: return
-            
-    #     # #     #save current cursor if there is scene
-    #     # #     self.scene_stack[-1].current_cursor = self.list_container.list.index
-    #     # # except IndexError: pass
-        
-    #     self.push_scene(scene)
-    #     # self.scene_stack.append(scene)
-    
-    # def pop_scene(self):
-    #     if len(self.scene_stack) >= 2:
-    #         self.scene_stack.pop()
-    #         self._change_scene(self.scene_stack[-1])
-   
 
 class AlertScreen(Screen):
     BINDINGS = [
@@ -578,6 +562,7 @@ class TUIApp(App):
         self.alert_screen = AlertScreen()
                 
         self.custom_process_stack = []
+        self.current_scene = None
 
     def on_mount(self):
         #install main screen
@@ -594,33 +579,34 @@ class TUIApp(App):
         
         #push main screen
         self.push_screen('main')
-        pass
     
     def on_list_container_pop(self, message: ListContainer.Pop):
         self.pop_custom_process()
         
     async def on_list_container_selected(self, message: ListContainer.Selected):
         item:CheckableListItem = message.item
+        current_process:CustomProcess = self.app.custom_process_stack[-1]
         
         if item.show_checkbox: item.toggle_check()
-        elif self.app.custom_process_stack[-1].is_waiting_input():
+        elif current_process.is_waiting_input:
             self.app.clear_input_box()
-            await self.app.custom_process_stack[-1].abort_input()
+            current_process.abort_input()
         
-        self.custom_process_stack[-1].response_select((message.index, message.item.value))
+        current_process.response_select((message.index, message.item.value))
         
     def on_list_container_submitted(self, message: ListContainer.Submitted):
-        checked = []
-        for idx, child in enumerate(message.children):
-            if child.checked: checked.append((idx, child.value))
-        
-        self.app.custom_process_stack[-1].response_select(checked)
+        if self.current_scene.multi_select:
+            checked = []
+            for idx, child in enumerate(message.children):
+                if child.checked: checked.append((idx, child.value))
+            
+            self.custom_process_stack[-1].response_select(checked)
         
     def on_input_container_submitted(self, message: InputContainer.Submitted):
         if self.custom_process_stack[-1] != None: self.custom_process_stack[-1].response_input(message.value)
     
-    async def on_input_container_aborted(self, message: InputContainer.Aborted):
-        if self.custom_process_stack[-1] != None: await self.custom_process_stack[-1].abort_input()
+    def on_input_container_aborted(self, message: InputContainer.Aborted):
+        if self.custom_process_stack[-1] != None: self.custom_process_stack[-1].abort_input()
     
     #---------
     
@@ -632,21 +618,20 @@ class TUIApp(App):
     def clear_log(self):
         self.logger_screen.logger.clear()
     
-    def clear_input_box(self):
+    def clear_input(self):
         self.main_screen.input_container.hide()
         self.main_screen.input_container.clear()
         
-    def run_custom_process(self, custom_process):
-        if len(self.custom_process_stack) > 0 : self.custom_process_stack[-1].stop()
+    def run_custom_process(self, custom_process, child=False):
         self.custom_process_stack.append(custom_process)
-        self.custom_process_stack[-1].start()
+        if child: self.custom_process_stack[-1].__run()
+        else: self.custom_process_stack[-1].run()
     
     def pop_custom_process(self):
         if len(self.custom_process_stack) > 1:
-            self.clear_input_box()
-            self.custom_process_stack.pop().stop()
-            self.custom_process_stack[-1].start()
-        
+            self.clear_input()
+            self.custom_process_stack.pop().abort_select()
+    
     def alert(self, text, prompt='Alert'):
         self.alert_screen.set(prompt, text)
         self.push_screen(self.alert_screen)
@@ -655,7 +640,39 @@ class TUIApp(App):
     def push_scene(self, scene):
         self.main_screen.push_scene(scene)
         
+    def open_input(self):
+        self.main_screen.input_container.show()
+    
+    def set_scene(self, scene:Scene):
+        # if self.current_scene is scene : return
+        
+        self.current_scene = scene
+        
+        #build item with scene
+        items = [CheckableListItem(value=item, show_checkbox=scene.multi_select) for item in scene.items]
+        
+        #update lists
+        self.main_screen.list_container.list.remove()
+        
+        self.main_screen.list_container.list = ListView(*items)
+        
+        self.main_screen.list_container.mount(self.main_screen.list_container.list)
+        
+        # for item in items: self.main_screen.list_container.list.append(item)
+        
+        #set layouts
+        self.main_screen.prompt.value = scene.main_prompt
+        self.help_screen.set(scene.help_prompt, scene.help_title, scene.help_doc)
+        
+    async def set_input(self, input_request:InputRequest):
+        input_container:InputContainer = self.main_screen.input_container
+        
+        input_container.prompt.value = input_request.prompt
+        input_container.help_doc.value = input_request.desc
+        input_container.input_box.placeholder = input_request.hint
+        
+        pass
+        
 if __name__ == '__main__':
     app = TUIApp()
     app.run()    
-

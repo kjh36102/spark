@@ -3,8 +3,8 @@ sys.path.append('./spark/modules/')
 sys.path.append('./spark/pages/')
 
 from TUI import TUIApp
-from TUI_DAO import Scene, InputRequest, get_func_names
-from TUI_events import CustomProcess
+from TUI_DAO import  get_func_names
+from TUI_events import CustomProcess, Scene, InputRequest
 from TUI_Widgets import CheckableListItem
 
 from pages import ManageCategory
@@ -16,15 +16,15 @@ class Main(CustomProcess):
         super().__init__(app, *args)
 
         self.funcs = [
-            Main.create_new_post,
-            Main.commit_and_push,
-            Main.advanced_menu,
-            Main.manage_post,
-            Main.manage_category,
-            Main.config_ftp_info,
-            Main.config_git_info,
-            Main.config_blog_info,
-            Main.initialize_blog,
+            self.create_new_post,
+            self.commit_and_push,
+            self.advanced_menu,
+            self.manage_post,
+            self.manage_category,
+            self.config_ftp_info,
+            self.config_git_info,
+            self.config_blog_info,
+            self.initialize_blog,
         ]
         
         help_doc ='''\
@@ -42,39 +42,46 @@ initialize blog - After clone from github, must run this once.\
         func_names = get_func_names(self.funcs)
         
         self.main_scene = Scene(
+            items=func_names,
             main_prompt = 'Welcome to Spark!',
-            items=[CheckableListItem(func_name) for func_name in func_names],
             help_title='Index description',
             help_doc=help_doc,
         )
-        
+    
     async def main(self):
-        while True:
-            idx, val = await self.request_select(self.main_scene)
-            await self.run(self.funcs[idx])
-        return await super().main()
+        idx, val = await self.request_select(self.main_scene)
+        
+        await self.funcs[idx]()
+        
+        pass
     
-    async def create_new_post(process, app):  pass
+    async def create_new_post(self): 
+        idx, val = await self.request_input(InputRequest(
+            prompt='asdf',
+            desc='qwer',
+            hint='zxcv',
+            default='zz'
+        ))
+        
+        pass
     
-    async def advanced_menu(process, app): pass
+    async def advanced_menu(self): pass
     
-    async def commit_and_push(process, app): pass
+    async def commit_and_push(self): pass
     
-    async def manage_post(process, app):
-        app.run_custom_process(ManagePost.ManagePostProcess(app))
+    async def manage_post(self): pass
     
-    async def manage_category(process, app): 
-        app.run_custom_process(ManageCategory.ManageCategoryProcess(app))
+    async def manage_category(self): pass
     
-    async def config_git_info(process, app): pass
+    async def config_git_info(self): pass
     
-    async def config_blog_info(process, app): pass
+    async def config_blog_info(self): pass
     
-    async def config_ftp_info(process, app): 
-        app.run_custom_process(ConfigFTPInfo.ConfigFTPInfoProcess(app))
+    async def config_ftp_info(self):
+        self.app.print_log('before run')
+        self.app.run_custom_process(ConfigFTPInfo.ConfigFTPInfoProcess(self), child=False)
     
-    async def initialize_blog(process, app): pass
-    
+    async def initialize_blog(self): pass
     
 class Spark(TUIApp):
     def __init__(self):
@@ -86,5 +93,4 @@ class Spark(TUIApp):
 if __name__ == '__main__':
     spark = Spark()
     spark.run()
-    
     
