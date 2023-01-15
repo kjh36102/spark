@@ -1,2 +1,7 @@
 ./_posts/raspberrypi4/Test post for add path/Test post for add path.md
 ./_posts/raspberrypi4/test post 1/test post 1.md
+./_posts/arduino/test1/test1.md
+./_posts/raspberrypi4/rasp1/rasp1.md
+./_posts/sdf/sdf_post1/sdf_post1.md
+./_posts/arduino/test2/test2.md
+./_posts/arduino/test3/test3.md

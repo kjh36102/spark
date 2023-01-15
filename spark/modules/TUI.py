@@ -4,10 +4,13 @@ from textual.screen import Screen
 from textual.containers import Container
 from textual.widgets import Label, Footer, ListView, TextLog, Input, Button
 from textual.containers import Grid
+from textual.message import Message, MessageTarget
 
 from TUI_events import *
 from TUI_DAO import *
 from TUI_Widgets import ReactiveLabel, Prompt, CheckableListItem
+
+from pyautogui import press
 
 
 DUMMY_LONG = '''\
@@ -86,15 +89,15 @@ class InputContainer(Container):
         
     async def action_submit_input(self):
         ret = self.input_box.value
-        self.clear()
-        self.hide()
+        # self.clear()
+        # self.hide()
         await self.emit(self.Submitted(self, ret))
         
         
     async def action_abort_input(self):
         await self.emit(self.Aborted(self))
         
-    def __set(self, prompt, help_doc, hint, preserve_value=False):
+    def __set(self, prompt, help_doc, hint, password=False, previous=None):
         new_prompt = ReactiveLabel(prompt, indent=1, bold=True)
         new_help_doc = ReactiveLabel(help_doc, indent=3)
         self.input_box.placeholder = hint
@@ -108,14 +111,19 @@ class InputContainer(Container):
         self.prompt = new_prompt
         self.help_doc = new_help_doc
         
-        if help_doc == '': self.help_doc.styles.display = 'none'
-        if not preserve_value: self.input_box.value = ''
+        if previous == None: self.input_box.value = ''
+        else: self.input_box.value = previous
         
-    def set(self, prompt, help_doc='', hint='', preserve_value=False):
+        if help_doc == '': self.help_doc.styles.display = 'none'
+        if password: self.input_box.password = True
+        else: self.input_box.password = False
+        
+        
+    def set(self, prompt, help_doc='', hint='', password=False, previous=None):
         self.prompt_origin = prompt
         self.help_doc_origin = help_doc
             
-        self.__set(self.prompt_origin, self.help_doc_origin, hint, preserve_value)
+        self.__set(self.prompt_origin, self.help_doc_origin, hint, password, previous)
 
     def clear(self):
         self.prompt_origin = 'There is no input request.'
@@ -158,8 +166,6 @@ class ListContainer(Container):
     def __init__(self, list_view = ListView(Label('Empty list')), multi_select=False) -> None:
         self.list = list_view
         super().__init__(self.list)
-        # self.multi_select = multi_select
-        # self.multi_select_items = {}
     
     class Selected(Message):
         def __init__(self, sender: MessageTarget, index, item) -> None:
@@ -189,12 +195,6 @@ class ListContainer(Container):
     async def action_select_item(self):
         idx = self.list.index
         item:CheckableListItem = self.list.children[idx]
-        
-        if self.app.custom_process_stack[-1].is_waiting_input():
-            self.app.custom_process_stack[-1].abort_input()
-            self.app.main_screen.input_container.hide()
-            self.app.main_screen.input_container.clear()
-        
         await self.emit(self.Selected(self, idx, item))
         
     async def action_submit_items(self):
@@ -438,7 +438,7 @@ class MainScreen(Screen):
         self.input_container = InputContainer()
         self.list_container = ListContainer()
         self.contents_container = Container(self.input_container, self.list_container)
-        self.scene_stack = []
+        # self.scene_stack = []
         self.multi_select_items = {}
 
     def compose(self):
@@ -467,10 +467,13 @@ class MainScreen(Screen):
     def action_release_focus(self):
         self.app.set_focus(None)
         
-    def _change_scene(self, scene:Scene):
+    def push_scene(self, scene:Scene):
         #change prompts and help doc
         self.prompt.value = scene.main_prompt
         self.app.help_screen.set(scene.help_prompt, scene.help_title, scene.help_doc)
+        
+        #save current cursor
+        cursor = self.list_container.list.index
         
         #remove current list
         self.list_container.list.remove()
@@ -485,28 +488,31 @@ class MainScreen(Screen):
         #set focus to list view
         self.app.set_focus(self.list_container.list)
         
-        #restore cursor        
-        self.list_container.list.index = scene.current_cursor
+        # #restore cursor        
+        # self.list_container.list.index = scene.current_cursor
+        
+        #restore cursor
+        self.list_container.list.index = cursor
         
         #scroll down to previous highlighted item
         highlighted = self.list_container.list.highlighted_child
         if highlighted != None: highlighted.scroll_visible(animate=False)
         
-    def push_scene(self, scene:Scene):
-        try: 
-            if self.scene_stack[-1] is scene: return
+    # def _push_scene(self, scene:Scene):
+    #     # try: 
+    #     # #     if self.scene_stack[-1] is scene: return
             
-            #save current cursor if there is scene
-            self.scene_stack[-1].current_cursor = self.list_container.list.index
-        except IndexError: pass
+    #     # #     #save current cursor if there is scene
+    #     # #     self.scene_stack[-1].current_cursor = self.list_container.list.index
+    #     # # except IndexError: pass
         
-        self._change_scene(scene)
-        self.scene_stack.append(scene)
+    #     self.push_scene(scene)
+    #     # self.scene_stack.append(scene)
     
-    def pop_scene(self):
-        if len(self.scene_stack) >= 2:
-            self.scene_stack.pop()
-            self._change_scene(self.scene_stack[-1])
+    # def pop_scene(self):
+    #     if len(self.scene_stack) >= 2:
+    #         self.scene_stack.pop()
+    #         self._change_scene(self.scene_stack[-1])
    
 
 class AlertScreen(Screen):
@@ -593,13 +599,15 @@ class TUIApp(App):
     def on_list_container_pop(self, message: ListContainer.Pop):
         self.pop_custom_process()
         
-    def on_list_container_selected(self, message: ListContainer.Selected):
+    async def on_list_container_selected(self, message: ListContainer.Selected):
         item:CheckableListItem = message.item
         
         if item.show_checkbox: item.toggle_check()
-        else: self.custom_process_stack[-1].response_select((message.index, message.item.value))
-            # self.main_screen.input_container.hide()
-            # self.main_screen.input_container.clear()
+        elif self.app.custom_process_stack[-1].is_waiting_input():
+            self.app.clear_input_box()
+            await self.app.custom_process_stack[-1].abort_input()
+        
+        self.custom_process_stack[-1].response_select((message.index, message.item.value))
         
     def on_list_container_submitted(self, message: ListContainer.Submitted):
         checked = []
@@ -611,8 +619,8 @@ class TUIApp(App):
     def on_input_container_submitted(self, message: InputContainer.Submitted):
         if self.custom_process_stack[-1] != None: self.custom_process_stack[-1].response_input(message.value)
     
-    def on_input_container_aborted(self, message: InputContainer.Aborted):
-        if self.custom_process_stack[-1] != None: self.custom_process_stack[-1].abort_input()
+    async def on_input_container_aborted(self, message: InputContainer.Aborted):
+        if self.custom_process_stack[-1] != None: await self.custom_process_stack[-1].abort_input()
     
     #---------
     
@@ -623,28 +631,30 @@ class TUIApp(App):
     
     def clear_log(self):
         self.logger_screen.logger.clear()
+    
+    def clear_input_box(self):
+        self.main_screen.input_container.hide()
+        self.main_screen.input_container.clear()
         
     def run_custom_process(self, custom_process):
         if len(self.custom_process_stack) > 0 : self.custom_process_stack[-1].stop()
         self.custom_process_stack.append(custom_process)
-        self.custom_process_stack[-1].run()
+        self.custom_process_stack[-1].start()
     
     def pop_custom_process(self):
         if len(self.custom_process_stack) > 1:
+            self.clear_input_box()
             self.custom_process_stack.pop().stop()
-            self.custom_process_stack[-1].run()
+            self.custom_process_stack[-1].start()
         
     def alert(self, text, prompt='Alert'):
         self.alert_screen.set(prompt, text)
         self.push_screen(self.alert_screen)
+        press('tab')
         
     def push_scene(self, scene):
         self.main_screen.push_scene(scene)
         
-    def pop_scene(self):
-        self.main_screen.pop_scene()
-    
-
 if __name__ == '__main__':
     app = TUIApp()
     app.run()    

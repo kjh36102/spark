@@ -8,22 +8,23 @@ from TUI_events import CustomProcess
 from TUI_Widgets import CheckableListItem
 
 from pages import ManageCategory
+from pages import ManagePost
+from pages import ConfigFTPInfo
     
 class Main(CustomProcess):
     def __init__(self, app: 'TUIApp', *args) -> None:
         super().__init__(app, *args)
 
         self.funcs = [
-            self.create_new_post,
-            self.synchronize_post,
-            self.commit_and_push,
-            self.manage_post,
-            self.manage_category,
-            self.convert_image_url,
-            self.revert_image_url,
-            self.config_ftp_info,
-            self.change_css_theme,
-            self.initialize_blog,
+            Main.create_new_post,
+            Main.commit_and_push,
+            Main.advanced_menu,
+            Main.manage_post,
+            Main.manage_category,
+            Main.config_ftp_info,
+            Main.config_git_info,
+            Main.config_blog_info,
+            Main.initialize_blog,
         ]
         
         help_doc ='''\
@@ -44,39 +45,35 @@ initialize blog - After clone from github, must run this once.\
             main_prompt = 'Welcome to Spark!',
             items=[CheckableListItem(func_name) for func_name in func_names],
             help_title='Index description',
-            help_doc=help_doc
+            help_doc=help_doc,
         )
         
     async def main(self):
         while True:
             idx, val = await self.request_select(self.main_scene)
-            
-            await self.funcs[idx]()
-            
+            await self.run(self.funcs[idx])
         return await super().main()
     
-    async def create_new_post(self): 
-        await ManageCategory.create_category(self, self.app)
+    async def create_new_post(process, app):  pass
     
-    async def synchronize_post(self): pass
+    async def advanced_menu(process, app): pass
     
-    async def commit_and_push(self): pass
+    async def commit_and_push(process, app): pass
     
-    async def manage_post(self): pass
+    async def manage_post(process, app):
+        app.run_custom_process(ManagePost.ManagePostProcess(app))
     
-    async def manage_category(self): 
-        self.app.run_custom_process(ManageCategory.ManageCategoryProcess(self.app))
+    async def manage_category(process, app): 
+        app.run_custom_process(ManageCategory.ManageCategoryProcess(app))
     
-    async def convert_image_url(self): pass
+    async def config_git_info(process, app): pass
     
-    async def revert_image_url(self): pass
+    async def config_blog_info(process, app): pass
     
-    async def config_ftp_info(self): pass
+    async def config_ftp_info(process, app): 
+        app.run_custom_process(ConfigFTPInfo.ConfigFTPInfoProcess(app))
     
-    async def change_css_theme(self): pass
-    
-    async def initialize_blog(self): pass
-    
+    async def initialize_blog(process, app): pass
     
     
 class Spark(TUIApp):
@@ -89,3 +86,5 @@ class Spark(TUIApp):
 if __name__ == '__main__':
     spark = Spark()
     spark.run()
+    
+    

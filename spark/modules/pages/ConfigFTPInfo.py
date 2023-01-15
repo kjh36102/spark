@@ -2,58 +2,137 @@ import sys
 sys.path.append('./spark/modules/')
 sys.path.append('./spark/modules/pages/')
 
-from TUI import Scene, Selector, get_func_names
+from TUI import TUIApp
+from TUI_DAO import Scene, InputRequest, get_func_names
+from TUI_events import CustomProcess
+from TUI_Widgets import CheckableListItem
 
-def get_scene():
-    funcs = [
-        see_config_info,
-        reconfigure
-    ]
+class ConfigFTPInfoProcess(CustomProcess):
+    def __init__(self, app: 'TUIApp', *args) -> None:
+        super().__init__(app, *args)
+        
+        self.funcs = [
+            self.see_config_info,
+            self.reconfigure 
+        ]
+        
+        func_names = get_func_names(self.funcs)
+        
+        self.scene = Scene(
+            items=[CheckableListItem(func_name) for func_name in func_names]
+        )
+        
+    async def main(self):
+        while True:
+            idx, val = await self.request_select(self.scene)
+            
+            await self.run(self.funcs[idx]())
+        return await super().main()
+    
+    async def see_config_info(process:CustomProcess, app:TUIApp):
+        await see_config_info(process, app)
+    
+    async def reconfigure(process:CustomProcess, app:TUIApp):
+        await reconfigure(process, app)
+        
+#---------------------------------------------------------------------
 
-    contents = get_func_names(funcs)
+async def see_config_info(process:CustomProcess, app:TUIApp):
+    infos = load_ftp_info()
 
-    scene = Scene(
-        contents=contents,
-        callbacks=funcs, 
+    info_str = f"""\
+HOSTNAME: {infos['hostname']}, USERNAME: {infos['username']}, PASSWORD: {infos['password']}
+BASEPATH: {infos['basepath']}, PORT: {infos['port']}, ENCODING: {infos['encoding']}\
+"""
+    app.alert(info_str)
+
+async def reconfigure(process:CustomProcess, app:TUIApp):
+    
+    #load previous ftp info
+    prev_infos = load_ftp_info()
+    
+    host_name = await process.request_input(
+        InputRequest(
+            prompt='Hostname.',
+            help_doc="Please enter an FTP hostname. ex) 192.168.xxx.xxx, ex) my-domain.com, Don't worry. This is not open to the public. ",
+            hint='domain or IP address',
+            essential=True,
+            previous=prev_infos['hostname']
+        )
     )
+    
+    user_name = await process.request_input(
+        InputRequest(
+            prompt='Username',
+            help_doc='Please enter FTP username.',
+            hint='username or ID',
+            essential=True,
+            previous=prev_infos['username']
+        )
+    )
+    
+    password = await process.request_input(
+        InputRequest(
+            prompt='Password',
+            help_doc="Please enter FTP password",
+            hint='password',
+            essential=True,
+            password=True,
+            previous=prev_infos['password']
+        )
+    )
+    
+    basepath = await process.request_input(
+        InputRequest(
+            prompt='Basepath',
+            help_doc="This is the path to save the local file to the FTP server. ex) /HDD1/embed ",
+            hint='path not end with /',
+            essential=True,
+            previous=prev_infos['basepath']
+        )
+    )
+    
+    port = await process.request_input(
+        InputRequest(
+            prompt='Port',
+            help_doc="Please enter FTP port. Default: 21",
+            hint='port',
+            default='21',
+            previous=prev_infos['port']
+        )
+    )
+    
+    encoding = await process.request_input(
+        InputRequest(
+            prompt='Encoding',
+            help_doc="Please enter FTP encoding. Default: utf-8",
+            hint='encoding',
+            default='utf-8',
+            previous=prev_infos['encoding']
+        )
+    )    
+    
+    app.clear_input_box()
+    
+    f_ftp_info = open('spark/ftp_info.yml', 'w')
 
-    return scene
+    f_ftp_info.write(f'hostname: {host_name}\n')
+    f_ftp_info.write(f'username: {user_name}\n')
+    f_ftp_info.write(f'password: {password}\n')
+    f_ftp_info.write(f'basepath: {basepath}\n')
+    f_ftp_info.write(f'port: {port}\n')
+    f_ftp_info.write(f'encoding: {encoding}\n')
 
-def see_config_info(spark:Selector):
+    f_ftp_info.close()
+
+    app.alert(f'Your FTP information has been saved in ftp_info.yml.')
+    
+    
+def load_ftp_info():
     f = open('./spark/ftp_info.yml', 'r', encoding='utf-8')
     raw_info = f.read()
     f.close()
-
-    spark.app.alert(raw_info)
-    pass
-
-def reconfigure(spark:Selector):
-    # spark.prompt_label.text = "Please input your web FTP info. Don't worry. It will not shown to public."
-
-    def _reconfigure_ftp_info(spark:Selector):
-        hostname, username, password, basepath, port, encoding = spark.get_input(6)
-
-        if port     == '': port = '21'
-        if encoding == '': encoding = 'utf-8'
-
-        f_ftp_info = open('spark/ftp_info.yml', 'w')
-
-        f_ftp_info.write(f'hostname: {hostname}\n')
-        f_ftp_info.write(f'username: {username}\n')
-        f_ftp_info.write(f'password: {password}\n')
-        f_ftp_info.write(f'basepath: {basepath}\n')
-        f_ftp_info.write(f'port: {port}\n')
-        f_ftp_info.write(f'encoding: {encoding}\n')
-
-        f_ftp_info.close()
-
-        spark.app.alert(f'Your FTP info is saved into ftp_info.yml.')
-
-    spark.request_input(prompt=[
-        ('Type FTP server hostname.', 'ex) 192.168.xxx.xxx, ex) my-domain.com'),
-        ('Type FTP server username.', 'username or ID'),
-        ('Type FTP server password.', 'password'),
-        ('Type FTP server basepath', 'root path which synchronize with local ex) /HDD1/embed'),
-        ('Type FTP server port.', 'default: 21'),
-        ('Type FTP server encoding.', 'default: utf-8'),
-    ], callback=_reconfigure_ftp_info)
+    
+    lines = raw_info.split('\n')
+    
+    return {line.split(':')[0] : line.split(':')[1].strip() for line in lines if line != ''}

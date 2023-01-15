@@ -10,15 +10,14 @@ from TUI_events import CustomProcess
 import shutil
 import os
 
-
 class ManageCategoryProcess(CustomProcess):
     def __init__(self, app: 'TUIApp', *args) -> None:
         super().__init__(app, *args)
         
         self.funcs = [
-            self.create_category,
-            self.rename_category,
-            self.delete_category,
+            ManageCategoryProcess.create_category,
+            ManageCategoryProcess.rename_category,
+            ManageCategoryProcess.delete_category,
         ]
         
         func_names = get_func_names(self.funcs)
@@ -32,17 +31,17 @@ class ManageCategoryProcess(CustomProcess):
         
         while True:
             idx, val = await self.request_select(self.scene)
-            await self.funcs[idx]()
+            await self.run(self.funcs[idx])
         
         return await super().main()
     
-    async def create_category(self):
-        await create_category(self, self.app)
+    async def create_category(process:CustomProcess, app:TUIApp):
+        await create_category(process, app)
     
-    async def rename_category(self):
+    async def rename_category(process:CustomProcess, app:TUIApp):
         pass
     
-    async def delete_category(self):
+    async def delete_category(process:CustomProcess, app:TUIApp):
         # self.app.push_scene(get_category_select_scene(
         # prompt='Which category do you want to delete?'))
     
@@ -55,7 +54,7 @@ class ManageCategoryProcess(CustomProcess):
         # dup_list = dup_list[:idx] + dup_list[min(len(dup_list) - 1, idx + 1):]
         pass
     
-    async def change_category(self):
+    async def change_category(process:CustomProcess, app:TUIApp):
         #filepath 변수 선언하기
         
         # f = open(filepath, 'r', encoding='utf-8')
@@ -67,11 +66,48 @@ class ManageCategoryProcess(CustomProcess):
         # f.write(raw)
         # f.close()
         pass
+    
+
+class CategorySelector(CustomProcess):
+    def __init__(self, app: 'TUIApp', prompt, multi_select=False) -> None:
+        super().__init__(app)
+        
+        categories = [filename.split('.')[0] for filename in os.listdir('./category/')]
+        
+        try: categories.remove('uncategorized')
+        except ValueError: self.build_category_md('uncategorized')
+        
+        #check if there is no category
+        self.scene = Scene(
+            main_prompt=f'{prompt} - Select Category',
+            items=[CheckableListItem(category, show_checkbox=multi_select) for category in categories],
+        ) if len(categories) > 0 else None
+        
+    async def main(self):
+        if self.scene == None:
+            self.app.alert("You haven't created any categories yet.")
+            self.app.pop_custom_process()
+            
+        idx, val = await self.request_select(self.scene)
+        
+        self.return_to_parent((idx, val))
+        
+        return await super().main()
+    
+    def build_category_md(category_name):
+        f = open(f'./category/{category_name}.md', 'w')
+        f.write(f'---\nlayout: category\ntitle: {category_name}\n---\n')
+        f.close()
+
+
+#-------------------------------------------------------------
 
 async def create_category(process:CustomProcess, app:TUIApp):
     category_name = await process.request_input(
         InputRequest(prompt='Type your new category name.', hint='new category name', essential=True)
     )
+    app.clear_input_box()
+    
     build_category_md(category_name)
     os.makedirs(f'./_posts/{category_name}')
     app.alert(f'Successfully created new category:{category_name}.')
@@ -85,7 +121,7 @@ def change_category(process:CustomProcess, app:TUIApp): pass
     
 def get_category_select_scene(prompt, multi_select=False):
     '''
-    return None if there is no category else category select scene.
+    raise CustomProcess.AbortedException if there is no category else return category select scene.
     '''
     categories = [filename.split('.')[0]
                 for filename in os.listdir('./category/')]
@@ -98,13 +134,13 @@ def get_category_select_scene(prompt, multi_select=False):
         
     scene = Scene(
         main_prompt=f'{prompt} - Select Category',
-        items=[CheckableListItem(category, show_checkbox=multi_select) for category in categories]
+        items=[CheckableListItem(category, show_checkbox=multi_select) for category in categories],
     )
 
     return scene
 
-def build_category_md(category_name):
-    f = open(f'./category/{category_name}.md', 'w')
-    f.write(f'---\nlayout: category\ntitle: {category_name}\n---\n')
-    f.close()
+# def build_category_md(category_name):
+#     f = open(f'./category/{category_name}.md', 'w')
+#     f.write(f'---\nlayout: category\ntitle: {category_name}\n---\n')
+#     f.close()
     

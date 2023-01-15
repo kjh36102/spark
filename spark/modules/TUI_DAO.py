@@ -1,12 +1,14 @@
 from TUI_Widgets import CheckableListItem
 
 class InputRequest:
-    def __init__(self, prompt, help_doc='', hint='', essential=False, default='') -> None:
+    def __init__(self, prompt, help_doc='', hint='', essential=False, default='', password=False, previous=None) -> None:
         self.prompt = prompt
         self.help_doc = help_doc
         self.hint = hint
         self.essential = essential
         self.default = default
+        self.password = password
+        self.previous = previous
 
 class Scene:
     def __init__(self, 
