@@ -163,9 +163,10 @@ class InputContainer(Container):
         self.help_doc_container.styles.height = 'auto'
         
 class ListContainer(Container):
-    def __init__(self, list_view = ListView(), multi_select=False) -> None:
-        self.list = list_view
-        super().__init__(self.list)
+    def __init__(self, multi_select=False) -> None:
+        # self.list = list_view
+        self.list_stack = []
+        super().__init__()
     
     class Selected(Message):
         def __init__(self, sender: MessageTarget, index, item) -> None:
@@ -188,36 +189,79 @@ class ListContainer(Container):
         Binding('escape', 'press_escape', 'back'),
         Binding('pageup', 'scroll_page_up', 'pageup', priority=True),
         Binding('pagedown', 'scroll_page_down', 'pagedown', priority=True),
+        Binding('up', 'scroll_up', 'up', priority=True),
+        Binding('down', 'scroll_down', 'down', priority=True),
         Binding('home', 'scroll_home', 'home', priority=True),
         Binding('end', 'scroll_end', 'end', priority=True),
     ]
         
     async def action_select_item(self):
-        idx = self.list.index
-        item:CheckableListItem = self.list.children[idx]
+        _, last_list = self.list_stack[-1]
+        idx = last_list.index
+        item:CheckableListItem = last_list.children[idx]
         await self.emit(self.Selected(self, idx, item))
         
     async def action_submit_items(self):
-        await self.emit(self.Submitted(self.app, self.list.children))
+        _, last_list = self.list_stack[-1]
+        await self.emit(self.Submitted(self.app, last_list.children))
         
     async def action_press_escape(self):
+        self.pop_list()
         await self.emit(self.Pop(self.app))
         
+    def action_scroll_up(self):
+        scene, last_list = self.list_stack[-1]
+        last_list.index = scene.cursor = last_list.index - 1
+
+    def action_scroll_down(self):
+        scene, last_list = self.list_stack[-1]
+        last_list.index = scene.cursor = last_list.index + 1
+
     def action_scroll_home(self):
-        self.list.index = 0
-        
+        scene, last_list = self.list_stack[-1]
+        last_list.index = scene.cursor = 0
+
     def action_scroll_end(self):
-        self.list.index = len(self.list.children) - 1
+        scene, last_list = self.list_stack[-1]
+        last_list.index = scene.cursor = len(last_list.children) - 1
         
     def action_scroll_page_up(self):
+        scene, last_list = self.list_stack[-1]
         unit = int((self.app.size.height - 2) * 0.8)
-        self.list.index -= unit
-        # self.list.action_cursor_up()
+        last_list.index = scene.cursor  = last_list.index - unit
         
     def action_scroll_page_down(self):
+        scene, last_list = self.list_stack[-1]
         unit = int((self.app.size.height - 2) * 0.8)
-        self.list.index += unit
-        # self.list.action_cursor_down()
+        last_list.index = scene.cursor  = last_list.index + unit
+
+    def push_list_from_scene(self, scene:Scene):
+        #make unvisible upper list
+        if len(self.list_stack) > 0:
+            last_list:ListView = self.list_stack[-1][1]
+            last_list.styles.display = 'none'
+
+        #add new list to this container
+        new_list = ListView(*scene.items)
+        self.mount(new_list)
+
+        #add this list to list stack
+        self.list_stack.append((scene, new_list))
+
+        pass
+
+    def pop_list(self):
+        #make visible upper list
+        if len(self.list_stack) > 1:
+            upper_list:ListView = self.list_stack[-2][1]
+            upper_list.styles.display = 'block'
+
+            #restore previous cursor
+            self.app.set_focus(upper_list)
+            upper_list.index = self.list_stack[-2][0].cursor
+
+        #remove last list from this container and pop
+        self.list_stack.pop()[1].remove()
         
 
 class LoadingBox(ReactiveLabel):
@@ -468,36 +512,39 @@ class MainScreen(Screen):
         self.app.set_focus(None)
         
     def push_scene(self, scene:Scene):
-        #change prompts and help doc
-        self.prompt.value = scene.main_prompt
-        self.app.help_screen.set(scene.help_prompt, scene.help_title, scene.help_doc)
+        #
+
+        # #change prompts and help doc
+        # self.prompt.value = scene.main_prompt
+        # self.app.help_screen.set(scene.help_prompt, scene.help_title, scene.help_doc)
         
-        #save current cursor
-        cursor = 0 if self.list_container.list.index == None else self.list_container.list.index
+        # #save current cursor
+        # cursor = 0 if self.list_container.list.index == None else self.list_container.list.index
         
-        #remove current list
-        self.list_container.list.remove()
+        # #remove current list
+        # self.list_container.list.remove()
         
-        #build new list
-        # scene.rebuild_items()   #This is required because widgets that have been removed once cannot be remounted
-        items = [CheckableListItem(value=item, show_checkbox=scene.multi_select) for item in scene.items]
-        self.list_container.list = ListView(*items)
+        # #build new list
+        # # scene.rebuild_items()   #This is required because widgets that have been removed once cannot be remounted
+        # items = [CheckableListItem(value=item, show_checkbox=scene.multi_select) for item in scene.items]
+        # self.list_container.list = ListView(*items)
         
-        #mount new list
-        self.list_container.mount(self.list_container.list)
+        # #mount new list
+        # self.list_container.mount(self.list_container.list)
         
-        #set focus to list view
-        self.app.set_focus(self.list_container.list)
+        # #set focus to list view
+        # self.app.set_focus(self.list_container.list)
         
-        # #restore cursor        
-        # self.list_container.list.index = scene.current_cursor
+        # # #restore cursor        
+        # # self.list_container.list.index = scene.current_cursor
         
-        #restore cursor
-        self.list_container.list.index = cursor
+        # #restore cursor
+        # self.list_container.list.index = cursor
         
-        #scroll down to previous highlighted item
-        highlighted = self.list_container.list.highlighted_child
-        if highlighted != None: highlighted.scroll_visible(animate=False)
+        # #scroll down to previous highlighted item
+        # highlighted = self.list_container.list.highlighted_child
+        # if highlighted != None: highlighted.scroll_visible(animate=False)
+        pass
 
 class AlertScreen(Screen):
     BINDINGS = [
@@ -581,13 +628,15 @@ class TUIApp(App):
         self.push_screen('main')
     
     def on_list_container_pop(self, message: ListContainer.Pop):
-        self.pop_custom_process()
+        # self.main_screen.list_container.pop_list()
+        # self.pop_custom_process()
+        pass
         
     async def on_list_container_selected(self, message: ListContainer.Selected):
         item:CheckableListItem = message.item
         current_process:CustomProcess = self.app.custom_process_stack[-1]
         
-        if item.show_checkbox: item.toggle_check()
+        if item.show_checkbox: item.toggle_check(); return
         elif current_process.is_waiting_input:
             self.app.clear_input_box()
             current_process.abort_input()

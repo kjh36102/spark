@@ -6,7 +6,7 @@ from types import CoroutineType
 if TYPE_CHECKING:
     from TUI import TUIApp, InputContainer
 
-from TUI_DAO import InputRequest, Scene
+from TUI_DAO import InputRequest, Scene, CheckableListItem
 import asyncio
 from pyautogui import press
 
@@ -20,13 +20,14 @@ class InputRequest:
         self.prevalue = prevalue
         
 class Scene:
-    def __init__(self, items, main_prompt='Select what you want', help_prompt='Show Help Doc', help_title='', help_doc='', multi_select=False) -> None:
-        self.items = items
+    def __init__(self, items, main_prompt='Select what you want', help_prompt='Show Help Doc', help_title='', help_doc='', cursor=0, multi_select=False) -> None:
         self.main_prompt = main_prompt
         self.help_prompt = help_prompt
         self.help_title = help_title
         self.help_doc = help_doc
         self.multi_select = multi_select
+        self.cursor = cursor
+        self.items = [CheckableListItem(item, show_checkbox=multi_select) for item in items]
     
 class CustomProcess:
     def __init__(self, app) -> None:
@@ -94,7 +95,7 @@ class CustomProcess:
     
     async def request_select(self, scene, polling_rate=0.05):
         #update TUI with given scene
-        self.app.push_scene(scene)
+        self.app.main_screen.list_container.push_list_from_scene(scene)
         
         # await self.app.set_scene(scene)
         
