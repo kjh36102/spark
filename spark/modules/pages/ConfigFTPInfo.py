@@ -7,13 +7,18 @@ from TUI_DAO import get_func_names
 from TUI_events import CustomProcess, Scene, InputRequest
 from TUI_Widgets import CheckableListItem
 
+
+def get_scene():
+    
+    pass
+
 class ConfigFTPInfoProcess(CustomProcess):
     def __init__(self, app: 'TUIApp') -> None:
         super().__init__(app)
         
         self.funcs = [
             self.see_config_info,
-            self.reconfigure 
+            self.reconfigure,
         ]
         
         func_names = get_func_names(self.funcs)
@@ -23,7 +28,7 @@ class ConfigFTPInfoProcess(CustomProcess):
         )
         
     async def main(self):
-        self.app.print_log('after run')
+        self.app.print_log('run config_ftp_info_process')
         
         idx, val = await self.request_select(self.scene)
         await self.funcs[idx]()
