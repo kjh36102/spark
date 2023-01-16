@@ -6,11 +6,6 @@ from TUI import *
 from TUI_DAO import *
 from TUI_Widgets import CheckableListItem
 
-
-def get_scene():
-    
-    pass
-
 class ConfigFTPInfoProcess(CustomProcess):
     def __init__(self, app: 'TUIApp') -> None:
         super().__init__(app)
@@ -27,8 +22,6 @@ class ConfigFTPInfoProcess(CustomProcess):
         )
         
     async def main(self):
-        self.app.print_log('run config_ftp_info_process')
-        
         idx, val = await self.request_select(self.scene)
         await self.funcs[idx]()
     
@@ -51,7 +44,7 @@ BASEPATH: {infos['basepath']}, PORT: {infos['port']}, ENCODING: {infos['encoding
 
 async def reconfigure(process:CustomProcess, app:TUIApp):
     
-    #load previous ftp info
+    #load prevalue ftp info
     prev_infos = load_ftp_info()
     
     host_name = await process.request_input(
@@ -60,7 +53,7 @@ async def reconfigure(process:CustomProcess, app:TUIApp):
             help_doc="Please enter an FTP hostname. ex) 192.168.xxx.xxx, ex) my-domain.com, Don't worry. This is not open to the public. ",
             hint='domain or IP address',
             essential=True,
-            previous=prev_infos['hostname']
+            prevalue=prev_infos['hostname']
         )
     )
     
@@ -70,7 +63,7 @@ async def reconfigure(process:CustomProcess, app:TUIApp):
             help_doc='Please enter FTP username.',
             hint='username or ID',
             essential=True,
-            previous=prev_infos['username']
+            prevalue=prev_infos['username']
         )
     )
     
@@ -81,7 +74,7 @@ async def reconfigure(process:CustomProcess, app:TUIApp):
             hint='password',
             essential=True,
             password=True,
-            previous=prev_infos['password']
+            prevalue=prev_infos['password']
         )
     )
     
@@ -91,7 +84,7 @@ async def reconfigure(process:CustomProcess, app:TUIApp):
             help_doc="This is the path to save the local file to the FTP server. ex) /HDD1/embed ",
             hint='path not end with /',
             essential=True,
-            previous=prev_infos['basepath']
+            prevalue=prev_infos['basepath']
         )
     )
     
@@ -101,7 +94,7 @@ async def reconfigure(process:CustomProcess, app:TUIApp):
             help_doc="Please enter FTP port. Default: 21",
             hint='port',
             default='21',
-            previous=prev_infos['port']
+            prevalue=prev_infos['port']
         )
     )
     
@@ -111,11 +104,9 @@ async def reconfigure(process:CustomProcess, app:TUIApp):
             help_doc="Please enter FTP encoding. Default: utf-8",
             hint='encoding',
             default='utf-8',
-            previous=prev_infos['encoding']
+            prevalue=prev_infos['encoding']
         )
     )    
-    
-    app.clear_input_box()
     
     f_ftp_info = open('spark/ftp_info.yml', 'w')
 

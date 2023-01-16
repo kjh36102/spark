@@ -92,9 +92,10 @@ class LoggerScreen(Screen):
     def __init__(self, name: str | None = None, id: str | None = None, classes: str | None = None) -> None:
         super().__init__(name, id, classes)
         
-        self.prompt = Prompt('Empty prompt.')
+        self.prompt = Prompt('Log')
         self.logger = TextLog(max_lines=200, wrap=True)
         self.loading_box = LoadingBox()
+        self.escape_lock = False
         
     def compose(self):
         yield self.prompt
@@ -104,16 +105,18 @@ class LoggerScreen(Screen):
         
     def on_mount(self):
         self.close_loading_box()
-        self.logger._automatic_refresh()
         
-    async def _on_resize(self, event: events.Resize) -> None:
+    async def _on_idle(self, event: events.Idle) -> None:
         
-        self.logger.styles.height = self.app.size.height - 2
+        if self.loading_box.show_state:
+            self.logger.styles.height = self.app.size.height - 3
+        else:
+            self.logger.styles.height = self.app.size.height - 2
         
-        return await super()._on_resize(event)
+        return await super()._on_idle(event)
         
     BINDINGS = [
-        Binding('ctrl+a', 'test1', 'test1'),
+        Binding('ctrl+a', 'clear_up', 'clear'),
         Binding('escape', 'pop_screen()', 'back'),
         Binding('up', 'scroll_up', 'up'),
         Binding('down', 'scroll_down', 'down'),
@@ -123,6 +126,11 @@ class LoggerScreen(Screen):
         Binding('end', 'scroll_end', 'end'),
     ]
     
+    def action_pop_screen(self):
+        if self.escape_lock: return
+        
+        self.app.pop_screen()
+            
     def action_scroll_up(self):
         self.logger.action_scroll_up()
         
@@ -143,8 +151,8 @@ class LoggerScreen(Screen):
         unit = int((self.app.size.height - 2) * 0.8)
         for _ in range(unit): self.logger.action_scroll_down()
     
-    def action_test1(self):
-        self.print('hello world')
+    def action_clear_up(self):
+        self.logger.clear()
         
     def open_loading_box(self):
         self.logger.styles.height = self.app.size.height - 3

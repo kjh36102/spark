@@ -44,22 +44,39 @@ initialize blog - After clone from github, must run this once.\
         )
     
     async def main(self):
-        self.app.print_log('run main_process')
         idx, val = await self.request_select(self.main_scene)
         await self.funcs[idx]()
     
     async def create_new_post(self): 
-        val = await self.request_input(InputRequest(
-            prompt='asdf',
-            desc='qwer',
-            hint='zxcv',
-            default='zz'
-        ))
+        test_scene1 = Scene(
+            items=[f'a={i}' for i in range(10)],
+        )
         
-        self.app.print_log('pin input:', val)
+        a = await self.request_select(test_scene1)
+        
+        test_scene2 = Scene(
+            items=[f'b={i}' for i in range(10)],
+        )
+        
+        b = await self.request_select(test_scene2)
+        
+        self.app.print_log('a:', a, ' ,b:', b)
         pass
     
-    async def advanced_menu(self): pass
+    async def advanced_menu(self): 
+        
+        self.app.open_logger(lock=True)
+        self.app.show_loading()
+        
+        for i in range(100):
+            self.app.print_log('i:', i)
+            self.app.set_loading_ratio(i / 100, f'working on: {i}')
+            await asyncio.sleep(0.05)
+        
+        self.app.hide_loading()
+        self.app.close_logger()
+        
+        pass
     
     async def commit_and_push(self): pass
     
@@ -72,48 +89,9 @@ initialize blog - After clone from github, must run this once.\
     async def config_blog_info(self): pass
     
     async def config_ftp_info(self):
-        self.app.print_log('before run')
-        # self.app.run_custom_process(ConfigFTPInfo.ConfigFTPInfoProcess(self))
-        
-        test_scene1 = Scene(
-            items=[
-              f'hi{i}' for i in range(20)  
-            ],
-            main_prompt='test main prompt',
-            help_prompt='test help prompt',
-            help_title='test help title',
-            help_doc='test help doc'
-        )
-        
-        selected = await self.request_select(test_scene1)
-        
-        self.app.print_log('selected:', selected)
-        
-        
-        test_scene2 = Scene(
-            items=[
-                f'zz{i}' for i in range(10)  
-            ],
-            main_prompt='test2 main prompt',
-            help_prompt='test2 help prompt',
-            help_title='test2 help title',
-            help_doc='test2 help doc',
-            multi_select=True
-        )
-        
-        selected2 = await self.request_select(test_scene2)
-        
-        self.app.print_log('selected2:', selected2)
-        
+        await self.run_next_process(ConfigFTPInfo.ConfigFTPInfoProcess(self.app))
     
     async def initialize_blog(self):
-        
-        # await ConfigFTPInfo.ConfigFTPInfoProcess(self.app).run()
-        
-        self.app.print_log('before run configFTP')
-        await self.run_next_process(ConfigFTPInfo.ConfigFTPInfoProcess(self.app))
-        self.app.print_log('after run configFTP')
-        
         pass
     
 class Spark(TUIApp):

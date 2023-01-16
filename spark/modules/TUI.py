@@ -12,16 +12,16 @@ from pyautogui import press
 import asyncio
 
 
-DUMMY_LONG = '''\
-Lorem Ipsum is simply dummy text of the printing and typesetting industry. Lorem Ipsum has been the industry's standard dummy text ever since the 1500s, when an unknown printer took a galley of type and scrambled it to make a type specimen book. It has survived not only five centuries, but also the leap into electronic typesetting, remaining essentially unchanged. It was popularised in the 1960s with the release of Letraset sheets containing Lorem Ipsum passages, and more recently with desktop publishing software like Aldus PageMaker including versions of Lorem Ipsum.
-Contrary to popular belief, Lorem Ipsum is not simply random text. It has roots in a piece of classical Latin literature from 45 BC, making it over 2000 years old. Richard McClintock, a Latin professor at Hampden-Sydney College in Virginia, looked up one of the more obscure Latin words, consectetur, from a Lorem Ipsum passage, and going through the cites of the word in classical literature, discovered the undoubtable source. Lorem Ipsum comes from sections 1.10.32 and 1.10.33 of "de Finibus Bonorum et Malorum" (The Extremes of Good and Evil) by Cicero, written in 45 BC. This book is a treatise on the theory of ethics, very popular during the Renaissance. The first line of Lorem Ipsum, "Lorem ipsum dolor sit amet..", comes from a line in section 1.10.32.
-Lorem Ipsum is simply dummy text of the printing and typesetting industry. Lorem Ipsum has been the industry's standard dummy text ever since the 1500s, when an unknown printer took a galley of type and scrambled it to make a type specimen book. It has survived not only five centuries, but also the leap into electronic typesetting, remaining essentially unchanged. It was popularised in the 1960s with the release of Letraset sheets containing Lorem Ipsum passages, and more recently with desktop publishing software like Aldus PageMaker including versions of Lorem Ipsum.
-Contrary to popular belief, Lorem Ipsum is not simply random text. It has roots in a piece of classical Latin literature from 45 BC, making it over 2000 years old. Richard McClintock, a Latin professor at Hampden-Sydney College in Virginia, looked up one of the more obscure Latin words, consectetur, from a Lorem Ipsum passage, and going through the cites of the word in classical literature, discovered the undoubtable source. Lorem Ipsum comes from sections 1.10.32 and 1.10.33 of "de Finibus Bonorum et Malorum" (The Extremes of Good and Evil) by Cicero, written in 45 BC. This book is a treatise on the theory of ethics, very popular during the Renaissance. The first line of Lorem Ipsum, "Lorem ipsum dolor sit amet..", comes from a line in section 1.10.32.\
-'''
+# DUMMY_LONG = '''\
+# Lorem Ipsum is simply dummy text of the printing and typesetting industry. Lorem Ipsum has been the industry's standard dummy text ever since the 1500s, when an unknown printer took a galley of type and scrambled it to make a type specimen book. It has survived not only five centuries, but also the leap into electronic typesetting, remaining essentially unchanged. It was popularised in the 1960s with the release of Letraset sheets containing Lorem Ipsum passages, and more recently with desktop publishing software like Aldus PageMaker including versions of Lorem Ipsum.
+# Contrary to popular belief, Lorem Ipsum is not simply random text. It has roots in a piece of classical Latin literature from 45 BC, making it over 2000 years old. Richard McClintock, a Latin professor at Hampden-Sydney College in Virginia, looked up one of the more obscure Latin words, consectetur, from a Lorem Ipsum passage, and going through the cites of the word in classical literature, discovered the undoubtable source. Lorem Ipsum comes from sections 1.10.32 and 1.10.33 of "de Finibus Bonorum et Malorum" (The Extremes of Good and Evil) by Cicero, written in 45 BC. This book is a treatise on the theory of ethics, very popular during the Renaissance. The first line of Lorem Ipsum, "Lorem ipsum dolor sit amet..", comes from a line in section 1.10.32.
+# Lorem Ipsum is simply dummy text of the printing and typesetting industry. Lorem Ipsum has been the industry's standard dummy text ever since the 1500s, when an unknown printer took a galley of type and scrambled it to make a type specimen book. It has survived not only five centuries, but also the leap into electronic typesetting, remaining essentially unchanged. It was popularised in the 1960s with the release of Letraset sheets containing Lorem Ipsum passages, and more recently with desktop publishing software like Aldus PageMaker including versions of Lorem Ipsum.
+# Contrary to popular belief, Lorem Ipsum is not simply random text. It has roots in a piece of classical Latin literature from 45 BC, making it over 2000 years old. Richard McClintock, a Latin professor at Hampden-Sydney College in Virginia, looked up one of the more obscure Latin words, consectetur, from a Lorem Ipsum passage, and going through the cites of the word in classical literature, discovered the undoubtable source. Lorem Ipsum comes from sections 1.10.32 and 1.10.33 of "de Finibus Bonorum et Malorum" (The Extremes of Good and Evil) by Cicero, written in 45 BC. This book is a treatise on the theory of ethics, very popular during the Renaissance. The first line of Lorem Ipsum, "Lorem ipsum dolor sit amet..", comes from a line in section 1.10.32.\
+# '''
 
-DUMMY_SHROT = '''\
-Lorem Ipsum is simply dummy text of the printing and typesetting industry. Lorem Ipsum has been the industry's standard dummy text ever since the 1500s, when an unknown printer took a galley of type and scrambled it to make a type specimen book. It has survived not only five centuries, but also the leap into electronic typesetting, remaining essentially unchanged. It was popularised in the 1960s with the release of Letraset sheets containing Lorem Ipsum passages, and more recently with desktop publishing software like Aldus PageMaker including versions of Lorem Ipsum.\
-'''
+# DUMMY_SHROT = '''\
+# Lorem Ipsum is simply dummy text of the printing and typesetting industry. Lorem Ipsum has been the industry's standard dummy text ever since the 1500s, when an unknown printer took a galley of type and scrambled it to make a type specimen book. It has survived not only five centuries, but also the leap into electronic typesetting, remaining essentially unchanged. It was popularised in the 1960s with the release of Letraset sheets containing Lorem Ipsum passages, and more recently with desktop publishing software like Aldus PageMaker including versions of Lorem Ipsum.\
+# '''
 
 
 class CustomProcess:
@@ -41,6 +41,8 @@ class CustomProcess:
     
     async def run_next_process(self, process:'CustomProcess', polling_interval=0.05):
         
+        self.print_status('WHILE IN RUN_NEXT_PROCESS')
+                
         #run next process and get result
         ret = await process.__run(parent=self)
         
@@ -62,6 +64,7 @@ class CustomProcess:
         #restore process target
         self.app.target_process = self
         
+        self.print_status('WHILE OUT RUN_NEXT_PROCESS')
         return ret
     
     def push_scene(self, scene:Scene):
@@ -121,9 +124,6 @@ class CustomProcess:
             #set current scene to target
             self.app.main_screen.list_container.target_scene = upper_scene
             
-        elif len(self.scene_stack) == 1:
-            if self.parent != None: self.exit()
-    
     async def main(self):
         '''override this'''
         pass    
@@ -147,7 +147,6 @@ class name: {class_name}
   scene_stack: {self.scene_stack}\
 '''
         self.app.print_log(current_statue)
-        
     
     async def __run(self, parent=None):
         self.parent = parent
@@ -155,13 +154,13 @@ class name: {class_name}
         
         while True: 
             if self.__abort_process_flag:
+                self.app.print_log('Abort process flag raised')
                 return self.__process_return
             try: await self.main()
-            except self.InputAborted: self.app.clear_input()
-            except self.SelectAborted: self.pop_scene()
+            except self.InputAborted: self.app.clear_input(); self.app.print_log('InputAborted')
+            except self.SelectAborted: self.pop_scene(); self.app.print_log('SelectAborted')
         
     def run(self):
-        # if not self.is_running:
         asyncio.ensure_future(self.__run())
 
     def response_input(self, value:str):
@@ -177,9 +176,11 @@ class name: {class_name}
     def abort_select(self):
         self.__abort_select_flag = True
         
+        if self.is_waiting_input: self.abort_input()
+        
+        if len(self.scene_stack) == 1 and self.parent != None: self.exit()
+        
         self.pop_scene()
-        
-        
         
     def exit(self, value=None):
         self.__abort_process_flag = True
@@ -225,7 +226,7 @@ class name: {class_name}
                 self.__abort_select_flag = False
                 self.is_waiting_select = False
                 raise self.SelectAborted
-            
+    
             await asyncio.sleep(polling_rate)
             
         #make return
@@ -267,9 +268,12 @@ class TUIApp(App):
         #install alert screen
         self.install_screen(self.alert_screen, name='alert')
         
+        #push Logger screen
+        self.push_screen('logger')
+        
         #push main screen
         self.push_screen('main')
-    
+        
     def on_list_container_pop(self, message: ListContainer.Pop):
         self.target_process.abort_select()
         
@@ -277,7 +281,7 @@ class TUIApp(App):
         #if process waiting input, abort input
         if self.target_process.is_waiting_input: 
             self.target_process.abort_input()
-        
+            
         scene = message.scene
         
         idx = scene.list_view.index
@@ -319,6 +323,27 @@ class TUIApp(App):
     
     def clear_log(self):
         self.logger_screen.logger.clear()
+        
+    def show_loading(self):
+        self.logger_screen.open_loading_box()
+    
+    def hide_loading(self):
+        self.logger_screen.close_loading_box()
+        
+    def open_logger(self, lock=False):
+        self.logger_screen.escape_lock = lock
+        
+        if self.screen != self.logger_screen:
+            self.push_screen(self.logger_screen)
+            press('tab')
+        
+    def close_logger(self):
+        if self.screen == self.logger_screen:
+            self.logger_screen.escape_lock = False
+            self.pop_screen()
+        
+    def set_loading_ratio(self, ratio, msg):
+        self.logger_screen.loading_box.set_ratio(ratio, msg)
     
     def clear_input(self):
         self.main_screen.input_container.hide()
@@ -334,11 +359,7 @@ class TUIApp(App):
     
     async def set_input(self, input_request:InputRequest):
         input_container:InputContainer = self.main_screen.input_container
-        
-        input_container.prompt.value = input_request.prompt
-        input_container.help_doc.value = input_request.desc
-        input_container.input_box.placeholder = input_request.hint
-        pass
+        input_container.set(input_request)
         
 if __name__ == '__main__':
     app = TUIApp()

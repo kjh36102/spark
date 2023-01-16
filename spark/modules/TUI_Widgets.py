@@ -3,77 +3,13 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from TUI_Widgets import ReactiveLabel, ListContainer
 
+from TUI_Elems import *
+from TUI_DAO import InputRequest
 from textual.app import events
-from textual.reactive import reactive
 from textual.binding import Binding
 from textual.containers import Container
-from textual.widgets import Label, ListItem, Input
+from textual.widgets import Input
 from textual.message import Message, MessageTarget
-
-class ReactiveLabel(Label):
-    value = reactive('')
-    
-    def __init__(self, value, shrink=True, indent=0, bold=False) :
-        super().__init__(shrink=shrink)
-        self.indent = indent
-        
-        self.styles.height = 'auto'
-        self.styles.width = '100%'
-        self.styles.margin = (0, indent, 0, indent)
-        self.styles.text_style = 'bold' if bold else 'none'
-        self.set_text(value)
-        
-    def __call__(self, value):
-        self.set_text(value)
-        
-    def set_text(self, value):
-        self.value = value
-    
-    def render(self):
-        return self.value
-
-class Prompt(ReactiveLabel):
-    def __init__(self, value) :
-        super().__init__(value)
-        
-        #styles
-        self.styles.background = '#0053aa'
-        self.styles.width = '100%'
-        self.styles.text_style = 'bold'
-        
-    def render(self):
-        return '  ' + self.value
-    
-class CheckableListItem(ListItem):
-    SYMBOL_UNCHECK = '[ ]'
-    SYMBOL_CHECK = '[+]'
-    check_box = reactive('[ ]')
-    value = ReactiveLabel('')
-
-    def __init__(self, value,  checked=False, show_checkbox=False) -> None:
-        super().__init__()
-
-        self.value = value
-        self.checked = checked
-        self.show_checkbox = show_checkbox
-
-        if checked: self.check_box = self.SYMBOL_CHECK
-        
-    def render(self):
-        if self.show_checkbox: return f' {self.check_box}  {self.value}'
-        else: return f' >  {self.value}'
-    
-    def toggle_check(self, app, item):
-        if self.checked: self.uncheck()
-        else: self.check()
-    
-    def check(self):
-        self.check_box = self.SYMBOL_CHECK
-        self.checked = True
-    
-    def uncheck(self):
-        self.check_box = self.SYMBOL_UNCHECK
-        self.checked = False
         
 class InputContainer(Container):
     
@@ -87,11 +23,12 @@ class InputContainer(Container):
         self.prompt_container = Container(self.prompt)
         self.help_doc_container = Container(self.help_doc)
         self.input_box = Input()
-        self.input_box.placeholder = hint
-        
+
+        self.current_request = None        
         self.state_display = False
-        
         self.expand_state = False
+        
+        self.input_box.placeholder = hint
         
         super().__init__(
             self.prompt_container, self.help_doc_container, self.input_box
@@ -113,7 +50,7 @@ class InputContainer(Container):
     def on_mount(self):
         self.hide()
         self.prompt_container.styles.height = 1
-        
+        self.help_doc_container.styles.display = 'none'
         self.clear()
         
     async def _on_idle(self, event: events.Idle) -> None:
@@ -121,7 +58,7 @@ class InputContainer(Container):
         return await super()._on_idle(event)
     
     BINDINGS = [
-        Binding('ctrl+x', 'expand_input_help', 'expand', priority=True),
+        Binding('ctrl+x', 'expand_input_help', 'expand/shrink', priority=True),
         Binding('enter', 'submit_input', 'submit', priority=True),
         Binding('ctrl+z', 'abort_input', 'abort', priority=True),
         Binding('escape', 'close_container', 'close', priority=True),
@@ -131,48 +68,61 @@ class InputContainer(Container):
         self.hide()
     
     def action_expand_input_help(self):
-        self.expand_state = False if self.expand_state else True
-        self.set(self.prompt_origin, self.help_doc_origin, self.input_box.placeholder, preserve_value=True)
+        # expand_binding = [binding for binding in self.BINDINGS if binding.key == 'ctrl+x'][0]
+        if self.expand_state: 
+            self.expand_state = False
+            # expand_binding.key_display = 'expand'
+        else:
+            self.expand_state = True
+            # expand_binding.key_display = 'shrink'
+            self.set(
+                InputRequest(
+                    prompt=self.prompt_origin,
+                    help_doc=self.help_doc_origin,
+                    hint=self.input_box.placeholder,
+                    essential=self.current_request.essential,
+                    password=self.current_request.password,
+                    prevalue=self.input_box.value
+                )
+            )
+            
+            self.prompt_container.styles.height = self.prompt.size.height
+            self.help_doc_container.styles.height = self.help_doc.size.height
         
     async def action_submit_input(self):
+        if self.current_request.essential:
+            if self.input_box.value == '': return
+        else:
+            if self.current_request.default != None:
+                self.input_box.value = self.current_request.default
+        
         await self.emit(self.Submitted(self, self.input_box.value))
         
     async def action_abort_input(self):
         await self.emit(self.Aborted(self))
         
-    def __set(self, prompt, help_doc, hint, password=False, previous=None):
-        new_prompt = ReactiveLabel(prompt, indent=1, bold=True)
-        new_help_doc = ReactiveLabel(help_doc, indent=3)
-        self.input_box.placeholder = hint
-      
-        self.prompt.remove()
-        self.help_doc.remove()
+    def set(self, input_request:InputRequest):
+        self.current_request = input_request
         
-        self.prompt_container.mount(new_prompt)
-        self.help_doc_container.mount(new_help_doc)
+        self.prompt_origin = input_request.prompt
+        self.help_doc_origin = input_request.help_doc
         
-        self.prompt = new_prompt
-        self.help_doc = new_help_doc
+        self.prompt.value = input_request.prompt
+        self.help_doc.value = input_request.help_doc
+        self.input_box.placeholder = input_request.hint
         
-        if previous == None: self.input_box.value = ''
-        else: self.input_box.value = previous
+        self.input_box.password = input_request.password
+        self.help_doc_container.styles.display = 'none' if input_request.help_doc == '' else 'block'
         
-        if help_doc == '': self.help_doc.styles.display = 'none'
-        if password: self.input_box.password = True
-        else: self.input_box.password = False
-        
-        
-    def set(self, prompt, help_doc='', hint='', password=False, previous=None):
-        self.prompt_origin = prompt
-        self.help_doc_origin = help_doc
+        if input_request.prevalue != '': 
+            self.input_box.value = input_request.prevalue
             
-        self.__set(self.prompt_origin, self.help_doc_origin, hint, password, previous)
-
     def clear(self):
         self.prompt_origin = 'There is no input request.'
         self.help_doc_origin = ''
         
-        self.__set(self.prompt_origin, self.help_doc_origin, '')
+        self.input_box.value = ''
+        self.set(InputRequest(prompt=self.prompt_origin))
  
     def show(self):
         self.state_display = True
@@ -284,14 +234,12 @@ class LoadingBox(ReactiveLabel):
         self.styles.width = '100%'
         self.ratio = ratio
         self.msg = msg
+        self.show_state = False
         
     def on_mount(self):
-        self.set_bar(self.ratio, self.msg)
+        self.set_ratio(self.ratio, self.msg)
         
-    def __call__(self, ratio, msg):
-        self.set_bar(ratio, msg)        
-        
-    def set_bar(self, ratio, msg):
+    def set_ratio(self, ratio, msg):
         if ratio < 0: ratio = 0
         elif ratio > 1: ratio = 1
         self.ratio = ratio
@@ -311,11 +259,13 @@ class LoadingBox(ReactiveLabel):
     def hide(self):
         self.styles.height = 0
         self.styles.display = 'none'
+        self.show_state = False
         
     def show(self):
         self.styles.height = 1
         self.styles.display = 'block'
+        self.show_state = True
         
     def clear(self):
-        self.set_bar(0, '')
+        self.set_ratio(0, '')
         
