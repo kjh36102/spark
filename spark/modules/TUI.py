@@ -1,16 +1,15 @@
-from textual.app import App, events
-from textual.binding import Binding
-from textual.screen import Screen
-from textual.containers import Container
-from textual.widgets import Label, Footer, ListView, TextLog, Input, Button
-from textual.containers import Grid
-from textual.message import Message, MessageTarget
+from typing import TYPE_CHECKING
 
-from TUI_events import *
-# from TUI_DAO import *
-from TUI_Widgets import ReactiveLabel, Prompt, CheckableListItem
+if TYPE_CHECKING:
+    from TUI import TUIApp, CustomProcess
 
+from TUI_DAO import Scene, InputRequest
+from TUI_Screens import *
+from TUI_Widgets import ListContainer, CheckableListItem
+from textual.app import App
+from textual.widgets import ListView
 from pyautogui import press
+import asyncio
 
 
 DUMMY_LONG = '''\
@@ -25,491 +24,223 @@ Lorem Ipsum is simply dummy text of the printing and typesetting industry. Lorem
 '''
 
 
-class InputContainer(Container):
+class CustomProcess:
+    def __init__(self, app:'TUIApp') -> None:
+        self.app = app
+        self.scene_stack = []
+        self.parent = None
+        self.__received_input_value = None
+        self.__received_select_items = None
+        self.__process_return = None
+        self.__abort_input_flag = False
+        self.__abort_select_flag = False
+        self.__abort_process_flag = False
+        self.is_waiting_input = False
+        self.is_waiting_select = False
+        self.is_running = False
     
-    def __init__(self, prompt='There is no input request.', help_doc='', hint=''):
+    async def run_next_process(self, process:'CustomProcess', polling_interval=0.05):
         
-        self.prompt_origin = prompt
-        self.help_doc_origin = help_doc
+        #run next process and get result
+        ret = await process.__run(parent=self)
         
-        self.prompt = ReactiveLabel(prompt, indent=1, bold=True)
-        self.help_doc = ReactiveLabel(help_doc, indent=3)
-        self.prompt_container = Container(self.prompt)
-        self.help_doc_container = Container(self.help_doc)
-        self.input_box = Input()
-        self.input_box.placeholder = hint
+        #get list contaier
+        list_container:ListContainer = self.app.main_screen.list_container
         
-        self.state_display = False
+        #remove remain list
+        list_container.target_scene.list_view.remove()
         
-        self.expand_state = False
+        #restore scene
+        list_container.target_scene = self.scene_stack[-1]
         
-        super().__init__(
-            self.prompt_container, self.help_doc_container, self.input_box
-        )
+        #make list visible
+        list_container.target_scene.list_view.styles.display = 'block'
         
-    class Submitted(Message):
-        def __init__(self, sender: MessageTarget, value) -> None:
-            super().__init__(sender)
-            self.value = value
+        #restore focus
+        self.app.set_focus(list_container.target_scene.list_view)
+        
+        #restore process target
+        self.app.target_process = self
+        
+        return ret
+    
+    def push_scene(self, scene:Scene):
+        #get list container
+        list_container:ListContainer = self.app.main_screen.list_container
+        
+        #if there is any context
+        if len(self.scene_stack) > 0:
+            last_scene = self.scene_stack[-1]
+                        
+            # exit when last scene is new scene
+            if last_scene is scene : return
             
-    class Aborted(Message):
-        def __init__(self, sender: MessageTarget) -> None:
-            super().__init__(sender)
+            #make unvisible last list
+            last_scene.list_view.styles.display = 'none'
         
-    async def _on_compose(self) -> None:
-        self.hide()
-        return await super()._on_compose()
-        
-    def on_mount(self):
-        self.hide()
-        self.prompt_container.styles.height = 1
-        
-        self.clear()
-        
-    async def _on_idle(self, event: events.Idle) -> None:
-        self.resize()
-        return await super()._on_idle(event)
-    
-    BINDINGS = [
-        Binding('ctrl+x', 'expand_input_help', 'expand', priority=True),
-        Binding('enter', 'submit_input', 'submit', priority=True),
-        Binding('ctrl+z', 'abort_input', 'abort', priority=True),
-        Binding('escape', 'close_container', 'close', priority=True),
-    ]
-    
-    async def action_close_container(self):
-        self.hide()
-    
-    def action_expand_input_help(self):
-        self.expand_state = False if self.expand_state else True
-        self.set(self.prompt_origin, self.help_doc_origin, self.input_box.placeholder, preserve_value=True)
-        
-    async def action_submit_input(self):
-        await self.emit(self.Submitted(self, self.input_box.value))
-        
-    async def action_abort_input(self):
-        await self.emit(self.Aborted(self))
-        
-    def __set(self, prompt, help_doc, hint, password=False, previous=None):
-        new_prompt = ReactiveLabel(prompt, indent=1, bold=True)
-        new_help_doc = ReactiveLabel(help_doc, indent=3)
-        self.input_box.placeholder = hint
-      
-        self.prompt.remove()
-        self.help_doc.remove()
-        
-        self.prompt_container.mount(new_prompt)
-        self.help_doc_container.mount(new_help_doc)
-        
-        self.prompt = new_prompt
-        self.help_doc = new_help_doc
-        
-        if previous == None: self.input_box.value = ''
-        else: self.input_box.value = previous
-        
-        if help_doc == '': self.help_doc.styles.display = 'none'
-        if password: self.input_box.password = True
-        else: self.input_box.password = False
-        
-        
-    def set(self, prompt, help_doc='', hint='', password=False, previous=None):
-        self.prompt_origin = prompt
-        self.help_doc_origin = help_doc
+        #if ther isn't any contents, or new process start
+        else:
+            #vanish previous process's scene
+            if list_container.target_scene != None:
+                list_container.target_scene.list_view.styles.display = 'none'            
+            pass
             
-        self.__set(self.prompt_origin, self.help_doc_origin, hint, password, previous)
+        #add new list to list container
+        scene.list_view = ListView(*scene.items)
+        list_container.mount(scene.list_view)
+        
+        #add new scene to stack
+        self.scene_stack.append(scene)
+        
+        #set current scene to target
+        list_container.target_scene = scene    
+        
+        
+    def pop_scene(self):
+        
+        if len(self.scene_stack) > 1:
+            # get upper scene
+            upper_scene:Scene = self.scene_stack[-2]
+            
+            #make upper list visible
+            upper_scene.list_view.styles.display = 'block'
+            
+            #restore previous cursor
+            self.app.set_focus(upper_scene.list_view)
+            upper_scene.list_view.index = upper_scene.cursor
+            
+            #get last scene
+            last_scene:Scene = self.scene_stack[-1]
+            
+            #remove last list from dom
+            last_scene.list_view.remove()
+            
+            #remove last scene from stack
+            self.scene_stack.pop()
+            
+            #set current scene to target
+            self.app.main_screen.list_container.target_scene = upper_scene
+            
+        elif len(self.scene_stack) == 1:
+            if self.parent != None: self.exit()
+    
+    async def main(self):
+        '''override this'''
+        pass    
+    
+    def print_status(self, title='No tile'):
+        class_name = self.__class__.__name__
+        
+        current_statue = f'''\
+ [{title}]
+class name: {class_name}
+  parent: {self.parent.__class__.__name__}
+  __received_input_value: {self.__received_input_value}
+  __received_select_items: {self.__received_select_items}
+  __process_return: {self.__process_return}
+  __abort_input_flag: {self.__abort_input_flag}
+  __abort_select_flag: {self.__abort_select_flag}
+  __abort_process_flag: {self.__abort_process_flag}
+  is_waiting_input: {self.is_waiting_input}
+  is_waiting_select: {self.is_waiting_select}
+  is_running: {self.is_running}
+  scene_stack: {self.scene_stack}\
+'''
+        self.app.print_log(current_statue)
+        
+    
+    async def __run(self, parent=None):
+        self.parent = parent
+        self.app.target_process = self
+        
+        while True: 
+            if self.__abort_process_flag:
+                return self.__process_return
+            try: await self.main()
+            except self.InputAborted: self.app.clear_input()
+            except self.SelectAborted: self.pop_scene()
+        
+    def run(self):
+        # if not self.is_running:
+        asyncio.ensure_future(self.__run())
 
-    def clear(self):
-        self.prompt_origin = 'There is no input request.'
-        self.help_doc_origin = ''
+    def response_input(self, value:str):
+        self.__received_input_value = value
+        self.app.clear_input()
         
-        self.__set(self.prompt_origin, self.help_doc_origin, '')
- 
-    def show(self):
-        self.state_display = True
-        self.styles.display = 'block'
-        self.app.set_focus(self.input_box)
-        pass
-    
-    def hide(self):
-        self.state_display = False
-        self.styles.display = 'none'
-        self.app.action_focus_next()
-        pass
-    
-    def resize(self):
-        contents_height = self.prompt_container.size.height + self.help_doc_container.size.height + 3
+    def response_select(self, items:dict):
+        self.__received_select_items = items
         
-        if not self.expand_state:
-            prompt_max_width = self.app.size.width - (self.prompt.indent * 2)
-            help_doc_max_width = (self.app.size.width - (self.help_doc.indent * 2)) * 2
-            
-            if len(self.prompt_origin) > prompt_max_width:
-                self.prompt.value = self.prompt_origin[:prompt_max_width - 10] + ' .....'
+    def abort_input(self):
+        self.__abort_input_flag = True
+        
+    def abort_select(self):
+        self.__abort_select_flag = True
+        
+        self.pop_scene()
+        
+        
+        
+    def exit(self, value=None):
+        self.__abort_process_flag = True
+        self.__process_return = value
+        
+    
+    async def request_input(self, input_request:InputRequest, polling_rate=0.05):
+        #set input layout and open container
+        asyncio.ensure_future(self.app.set_input(input_request))
+        self.app.open_input()
                 
-            if len(self.help_doc_origin) > help_doc_max_width:
-                self.help_doc.value = self.help_doc_origin[:help_doc_max_width - 15] + ' .....'
-        
-            self.styles.height = min((self.app.size.height - 2), contents_height)
-        else: self.styles.height = contents_height    
+        #wait until user input
+        self.is_waiting_input = True
+
+        while self.__received_input_value == None:
             
-        self.prompt_container.styles.height = 'auto'
-        self.help_doc_container.styles.height = 'auto'
-        
-class ListContainer(Container):
-    def __init__(self, multi_select=False) -> None:
-        self.target_scene = None
-        super().__init__()
-    
-    class Selected(Message):
-        def __init__(self, sender: MessageTarget, scene) -> None:
-            super().__init__(sender)
-            self.scene = scene
+            #check aborted
+            if self.__abort_input_flag == True:
+                self.__abort_input_flag = False
+                self.is_waiting_input = False
+                raise self.InputAborted
             
-    class Pop(Message):
-        def __init__(self, sender: MessageTarget) -> None:
-            super().__init__(sender)
+            await asyncio.sleep(polling_rate)
+        
+        #make return
+        ret = self.__received_input_value
+        self.__received_input_value = None
+        self.is_waiting_input = False
+        
+        return ret
+    
+    async def request_select(self, scene, polling_rate=0.05):
+        
+        #update TUI with given scene
+        self.push_scene(scene)
+        
+        #wait until user select or submit
+        self.is_waiting_select = True
+        while self.__received_select_items == None:
             
-    class Submitted(Message):
-        def __init__(self, sender: MessageTarget, scene) -> None:
-            super().__init__(sender)
-            self.scene = scene
-        
-    BINDINGS = [
-        Binding('enter', 'submit_items', 'submit', key_display='ENTER', priority=True),
-        Binding('space', 'select_item', 'select', key_display='SPACE'),
-        Binding('escape', 'press_escape', 'back'),
-        Binding('pageup', 'scroll_page_up', 'pageup', priority=True),
-        Binding('pagedown', 'scroll_page_down', 'pagedown', priority=True),
-        Binding('up', 'scroll_up', 'up', priority=True),
-        Binding('down', 'scroll_down', 'down', priority=True),
-        Binding('home', 'scroll_home', 'home', priority=True),
-        Binding('end', 'scroll_end', 'end', priority=True),
-    ]
-        
-    async def action_select_item(self):
-        await self.emit(self.Selected(self, self.target_scene))
-        
-    async def action_submit_items(self):
-        await self.emit(self.Submitted(self, self.target_scene))
-        
-    async def action_press_escape(self):
-        await self.emit(self.Pop(self))
-        
-    def move_cursor_up(scene, value):
-        scene.list_view.index = scene.list_view.index - value
-        scene.cursor = scene.list_view.index
-        
-    def move_cursor_down(scene, value):
-        scene.list_view.index = scene.list_view.index + value
-        scene.cursor = scene.list_view.index
-    
-    def move_cursor_to(scene, value):
-        scene.list_view.index = value
-        scene.cursor = scene.list_view.index
-        
-    def action_scroll_up(self):
-        ListContainer.move_cursor_up(self.target_scene, 1)
-        
-    def action_scroll_down(self):
-        ListContainer.move_cursor_down(self.target_scene, 1)
-
-    def action_scroll_home(self):
-        ListContainer.move_cursor_to(self.target_scene, 0)
-
-    def action_scroll_end(self):
-        ListContainer.move_cursor_to(self.target_scene, len(self.target_scene.list_view.children) - 1)
-        
-    def action_scroll_page_up(self):
-        unit = int((self.app.size.height - 2) * 0.8)
-        ListContainer.move_cursor_up(self.target_scene, unit)
-        
-    def action_scroll_page_down(self):
-        unit = int((self.app.size.height - 2) * 0.8)
-        ListContainer.move_cursor_down(self.target_scene, unit)
-        
-
-class LoadingBox(ReactiveLabel):
-    def __init__(self, ratio=0, msg=''):
-        super().__init__('')
-        self.styles.width = '100%'
-        self.ratio = ratio
-        self.msg = msg
-        
-    def on_mount(self):
-        self.set_bar(self.ratio, self.msg)
-        
-    def __call__(self, ratio, msg):
-        self.set_bar(ratio, msg)        
-        
-    def set_bar(self, ratio, msg):
-        if ratio < 0: ratio = 0
-        elif ratio > 1: ratio = 1
-        self.ratio = ratio
-        self.msg = msg
-        
-        max_width = 20
-        bar_len = int(max_width * ratio)
-        bar = '■' * bar_len
-        remain = ' ' * (max_width - bar_len)
-        
-        msg_width = self.app.size.width - (max_width + 4)
-        if len(msg) > msg_width: fit_msg = msg[:msg_width - 3] + '...'
-        else: fit_msg = msg
-        
-        self.value = '[' + bar + remain + '] ' + fit_msg
-        
-    def hide(self):
-        self.styles.height = 0
-        self.styles.display = 'none'
-        
-    def show(self):
-        self.styles.height = 1
-        self.styles.display = 'block'
-        
-    def clear(self):
-        self.set_bar(0, '')
-
-
-class HelpScreen(Screen):
-    def __init__(self, name: str | None = None, id: str | None = None, classes: str | None = None) -> None:
-        super().__init__(name, id, classes)
-        
-        self.prompt = Prompt('Empty prompt.')
-        self.resize_flag = False
-    
-    def compose(self):
-        yield self.prompt
-        yield Footer()
-        
-    async def _on_resize(self, event: events.Resize) -> None:
-        self.resize()
-        return await super()._on_resize(event)
-        
-    BINDINGS = [
-        Binding('escape', 'pop_screen()', 'back'),
-        Binding('up', 'scroll_up', 'up'),
-        Binding('down', 'scroll_down', 'down'),
-        Binding('pageup', 'scroll_page_up', 'pageup'),
-        Binding('pagedown', 'scroll_page_down', 'pagedown'),
-        Binding('home', 'scroll_home', 'home'),
-        Binding('end', 'scroll_end', 'end'),
-    ]
-    
-    def set(self, prompt, help_title, help_doc):
-        try: self.contents_container.remove()
-        except AttributeError: pass
-        
-        self.prompt.value = prompt
-        
-        self.help_title = ReactiveLabel(help_title, indent=1, bold=True)
-        self.help_title_container = Container(self.help_title)
-        
-        self.help_doc = ReactiveLabel(help_doc, indent=3)
-        self.help_doc_container = Container(self.help_doc)
-        
-        self.contents_container = Container(self.help_title_container, self.help_doc_container)
-        
-        self.mount(self.contents_container)
-        
-        self.help_title_container.styles.height = self.help_doc_container.styles.height = 'auto'
-        
-        self.resize_flag = True
-    
-    #essential
-    async def _on_idle(self, event: events.Idle) -> None:
-        self.resize()
-        return await super()._on_idle(event)
-    
-    def action_scroll_up(self):
-        self.contents_container.action_scroll_up()
-        
-    def action_scroll_down(self):
-        self.contents_container.action_scroll_down()
-        
-    def action_scroll_home(self):
-        self.contents_container.action_scroll_home()
-        
-    def action_scroll_end(self):
-        self.contents_container.action_scroll_end()
-        
-    def action_scroll_page_up(self):
-        unit = int((self.app.size.height - 2) * 0.8)
-        for _ in range(unit): self.contents_container.action_scroll_up()
-        
-    def action_scroll_page_down(self):
-        unit = int((self.app.size.height - 2) * 0.8)
-        for _ in range(unit): self.contents_container.action_scroll_down()
-    
-    def resize(self):
-        try:
-            self.help_title_container.styles.height = self.help_title.size.height
-            self.help_doc_container.styles.height = self.help_doc.size.height
-            self.contents_container.styles.height = self.app.size.height - 2
-        except AttributeError: pass
-
-    def clear(self):
-        self.prompt.value = ''
-        self.help_title.value = ''
-        self.help_doc.value = ''
-
-class LoggerScreen(Screen):
-    def __init__(self, name: str | None = None, id: str | None = None, classes: str | None = None) -> None:
-        super().__init__(name, id, classes)
-        
-        self.prompt = Prompt('Empty prompt.')
-        self.logger = TextLog(max_lines=200, wrap=True)
-        self.loading_box = LoadingBox()
-        
-    def compose(self):
-        yield self.prompt
-        yield self.logger
-        yield self.loading_box
-        yield Footer()
-        
-    def on_mount(self):
-        self.close_loading_box()
-        self.logger._automatic_refresh()
-        
-    async def _on_resize(self, event: events.Resize) -> None:
-        
-        self.logger.styles.height = self.app.size.height - 2
-        
-        return await super()._on_resize(event)
-        
-    BINDINGS = [
-        Binding('ctrl+a', 'test1', 'test1'),
-        Binding('escape', 'pop_screen()', 'back'),
-        Binding('up', 'scroll_up', 'up'),
-        Binding('down', 'scroll_down', 'down'),
-        Binding('pageup', 'scroll_page_up', 'pageup'),
-        Binding('pagedown', 'scroll_page_down', 'pagedown'),
-        Binding('home', 'scroll_home', 'home'),
-        Binding('end', 'scroll_end', 'end'),
-    ]
-    
-    def action_scroll_up(self):
-        self.logger.action_scroll_up()
-        
-    def action_scroll_down(self):
-        self.logger.action_scroll_down()
-        
-    def action_scroll_home(self):
-        self.logger.action_scroll_home()
-        
-    def action_scroll_end(self):
-        self.logger.action_scroll_end()
-        
-    def action_scroll_page_up(self):
-        unit = int((self.app.size.height - 2) * 0.8)
-        for _ in range(unit): self.logger.action_scroll_up()
-        
-    def action_scroll_page_down(self):
-        unit = int((self.app.size.height - 2) * 0.8)
-        for _ in range(unit): self.logger.action_scroll_down()
-    
-    def action_test1(self):
-        self.print('hello world')
-        
-    def open_loading_box(self):
-        self.logger.styles.height = self.app.size.height - 3
-        self.loading_box.show()
-        
-    def close_loading_box(self):
-        self.logger.styles.height = self.app.size.height - 2
-        self.loading_box.hide()
-        
-    def print(self, text):
-        self.logger.write(text)
-
-
-class MainScreen(Screen):
-    
-    def __init__(self, name: str | None = None, id: str | None = None, classes: str | None = None) -> None:
-        super().__init__(name, id, classes)
-        self.prompt = Prompt('Empty prompt')
-        self.input_container = InputContainer()
-        self.list_container = ListContainer()
-        self.contents_container = Container(self.input_container, self.list_container)
-        # self.scene_stack = []
-        self.multi_select_items = {}
-
-    def compose(self):
-        yield self.prompt
-        yield self.contents_container
-        yield Footer()
-        
-    BINDINGS = [
-        Binding('i', 'toggle_input_container', 'toggle input'),
-        Binding('l', 'push_screen("logger")', 'open logger'),
-        Binding('h', 'open_help', 'open help'),
-        Binding('r', 'release_focus', 'release focus'),
-    ]
-    
-    def action_open_help(self):
-        self.app.push_screen(self.app.help_screen)
-        pass
-
-    def action_toggle_input_container(self):
-        if self.input_container.state_display == False: 
-            self.input_container.show()
-        else: 
-            self.input_container.hide()
+            #check aborted
+            if self.__abort_select_flag == True:
+                self.__abort_select_flag = False
+                self.is_waiting_select = False
+                raise self.SelectAborted
             
-    def action_release_focus(self):
-        self.app.set_focus(None)
+            await asyncio.sleep(polling_rate)
+            
+        #make return
+        ret = self.__received_select_items
+        self.__received_select_items = None
+        self.is_waiting_select = False
         
-class AlertScreen(Screen):
-    BINDINGS = [
-        Binding('space', 'space', 'OK', key_display='SPACE', priority=True),
-        Binding('enter', 'enter', '', show=False, priority=True),
-        Binding('escape', 'escape', '', show=False, priority=True),
-    ]
-
-    def action_space(self):
-        self.button.press()
+        self.pop_scene()
     
-    def action_enter(self):
-        self.button.press()
-        
-    def action_escape(self):
-        self.button.press()
-
-    def __init__(self, name: str | None = None, id: str | None = None, classes: str | None = None) -> None:
-        super().__init__(name, id, classes)
-
-        self.prompt = Prompt('Alert')
-        self.label = ReactiveLabel("Empty contents")
-        self.button = Button("OK", variant="primary", id='ok_btn')
-        self.grid = Grid(self.label, self.button)
-
-        self.grid.styles.grid_size_columns = 1
-        self.grid.styles.grid_gutter_horizontal = 2
-        self.grid.styles.grid_gutter_vertical = 1
-
-        self.label.styles.background = None
-        self.label.styles.width = '100%'
-        self.label.styles.height = '100%'
-        self.label.styles.content_align = ('center', 'bottom')
-
-        self.button.styles.content_align = ('center', 'bottom')
-        self.button.styles.width = 10
-
-    def compose(self):
-        yield self.prompt
-        yield self.grid
-        yield Footer()
-
-    def on_button_pressed(self, event: Button.Pressed) -> None:
-        self.app.pop_screen()
-        self.app.action_focus_next()
-
-    async def _on_resize(self, event: events.Resize) -> None:
-        self.button.styles.margin = (0, 0, 0, int(((self.app.size.width) - self.button.size.width) / 2))
-        return await super()._on_resize(event)
+        return ret
     
-    def set(self, prompt, text):
-        self.prompt.value = prompt
-        self.label.value = text
+    class InputAborted(Exception): pass
+    class SelectAborted(Exception): pass
+    
+
 
 class TUIApp(App):
     

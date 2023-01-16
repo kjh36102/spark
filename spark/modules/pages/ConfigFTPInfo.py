@@ -2,9 +2,8 @@ import sys
 sys.path.append('./spark/modules/')
 sys.path.append('./spark/modules/pages/')
 
-from TUI import TUIApp
-from TUI_DAO import get_func_names
-from TUI_events import CustomProcess, Scene, InputRequest
+from TUI import *
+from TUI_DAO import *
 from TUI_Widgets import CheckableListItem
 
 

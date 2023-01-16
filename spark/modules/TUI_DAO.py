@@ -1,42 +1,25 @@
 from TUI_Widgets import CheckableListItem
 
 class InputRequest:
-    def __init__(self, prompt, help_doc='', hint='', essential=False, default='', password=False, previous=None) -> None:
+    def __init__(self, prompt, desc='', hint='', default=None, password=False, prevalue=''):
         self.prompt = prompt
-        self.help_doc = help_doc
+        self.desc = desc
         self.hint = hint
-        self.essential = essential
         self.default = default
         self.password = password
-        self.previous = previous
-
-class Scene:
-    def __init__(self, 
-                main_prompt='Select what you want.',
-                items=[],
-                help_prompt='Do you need help?',
-                help_title='',
-                help_doc='',
-                cursor_idx=0) -> None:
+        self.prevalue = prevalue
         
+class Scene:
+    def __init__(self, items, main_prompt='Select what you want', help_prompt='Show Help Doc', help_title='', help_doc='', cursor=0, multi_select=False) -> None:
         self.main_prompt = main_prompt
-        self.items = items
-        self.help_title = help_title
         self.help_prompt = help_prompt
+        self.help_title = help_title
         self.help_doc = help_doc
-        self.current_cursor = cursor_idx
-
-    def add_item(self, item):
-        self.items.append(item)
-    
-    def get_item(self, idx):
-        return self.items[idx]
-    
-    def rebuild_items(self):
-        new_items = []
-        for item in self.items:
-            new_items.append(CheckableListItem(item.value, item.checked, item.show_checkbox))
-        self.items = new_items
+        self.multi_select = multi_select
+        self.cursor = cursor
+        self.items = [CheckableListItem(item, show_checkbox=multi_select) for item in items]
+        self.list_view = None
+        self.selected_items = {}
         
 def get_func_names(funcs):
     return [(func.__name__).replace('_', ' ') for func in funcs]
