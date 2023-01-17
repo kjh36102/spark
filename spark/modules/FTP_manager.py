@@ -140,7 +140,6 @@ class FTP:
 
                 # print('remote_file_sizes:', remote_file_sizes)
 
-
                 #local_file_sizes 구하기
                 local_file_names = os.listdir(src)
                 local_file_sizes = {}
@@ -204,25 +203,26 @@ class FTP:
 
         return src, target
 
-ftp = FTP()
-ftp.load_info()
-ftp.connect()
+if __name__ == '__main__':
+    ftp = FTP()
+    ftp.load_info()
+    ftp.connect()
 
-src_list = []
-target_list = []
+    src_list = []
+    target_list = []
 
-while True:
-    input_str = input('input file dir >> ')
+    while True:
+        input_str = input('input file dir >> ')
 
-    if input_str == 'x': break
+        if input_str == 'x': break
 
-    src, target = FTP.convert_path(input_str)
+        src, target = FTP.convert_path(input_str)
 
-    src_list.append(src)
-    target_list.append(target)
+        src_list.append(src)
+        target_list.append(target)
 
-    # print(src_list, target_list)
+        print(src_list, target_list)
 
-ftp.synchronize(src_list, target_list)
+    ftp.synchronize(src_list, target_list)
 
-ftp.close()
+    ftp.close()

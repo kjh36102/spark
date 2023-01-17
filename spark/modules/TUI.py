@@ -41,7 +41,7 @@ class CustomProcess:
     
     async def run_next_process(self, process:'CustomProcess', polling_interval=0.05):
         
-        self.print_status('WHILE IN RUN_NEXT_PROCESS')
+        # self.print_status('WHILE IN RUN_NEXT_PROCESS')
                 
         #run next process and get result
         ret = await process.__run(parent=self)
@@ -64,10 +64,14 @@ class CustomProcess:
         #restore process target
         self.app.target_process = self
         
-        self.print_status('WHILE OUT RUN_NEXT_PROCESS')
+        # self.print_status('WHILE OUT RUN_NEXT_PROCESS')
         return ret
     
     def push_scene(self, scene:Scene):
+        # #change prompts
+        self.app.main_screen.prompt.value = scene.main_prompt
+        self.app.help_screen.set(scene.help_prompt, scene.help_title, scene.help_doc)
+
         #get list container
         list_container:ListContainer = self.app.main_screen.list_container
         
@@ -83,6 +87,8 @@ class CustomProcess:
         
         #if ther isn't any contents, or new process start
         else:
+
+
             #vanish previous process's scene
             if list_container.target_scene != None:
                 list_container.target_scene.list_view.styles.display = 'none'            
@@ -107,7 +113,11 @@ class CustomProcess:
             
             #make upper list visible
             upper_scene.list_view.styles.display = 'block'
-            
+
+            # #change prompts
+            self.app.main_screen.prompt.value = upper_scene.main_prompt
+            self.app.help_screen.set(upper_scene.help_prompt, upper_scene.help_title, upper_scene.help_doc)
+
             #restore previous cursor
             self.app.set_focus(upper_scene.list_view)
             upper_scene.list_view.index = upper_scene.cursor
@@ -178,7 +188,8 @@ class name: {class_name}
         
         if self.is_waiting_input: self.abort_input()
         
-        if len(self.scene_stack) == 1 and self.parent != None: self.exit()
+        if len(self.scene_stack) <= 1 and self.parent != None:
+            self.exit()
         
         self.pop_scene()
         
@@ -214,6 +225,12 @@ class name: {class_name}
     
     async def request_select(self, scene, polling_rate=0.05):
         
+        #make empty scene if scene is none
+        if scene == None:
+            scene = Scene(
+                items=['empty']
+            )
+
         #update TUI with given scene
         self.push_scene(scene)
         
@@ -294,7 +311,7 @@ class TUIApp(App):
                 scene.selected_items.pop(idx)
             else:
                 selected_item.check()
-                scene.selected_items[idx] = selected_item
+                scene.selected_items[idx] = selected_item.value
         else: self.target_process.response_select((idx, selected_item.value))
         
     def on_list_container_submitted(self, message: ListContainer.Submitted):
@@ -335,7 +352,9 @@ class TUIApp(App):
         
         if self.screen != self.logger_screen:
             self.push_screen(self.logger_screen)
+            
             press('tab')
+        
         
     def close_logger(self):
         if self.screen == self.logger_screen:
@@ -361,6 +380,8 @@ class TUIApp(App):
         input_container:InputContainer = self.main_screen.input_container
         input_container.set(input_request)
         
+    def print_bar(self):
+        self.print_log('----------------------')
 if __name__ == '__main__':
     app = TUIApp()
     app.run()    

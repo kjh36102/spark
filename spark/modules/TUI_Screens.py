@@ -105,6 +105,10 @@ class LoggerScreen(Screen):
         
     def on_mount(self):
         self.close_loading_box()
+        # self.auto_refresh = True
+        # self.logger.auto_refresh = True
+        # self.logger._auto_refresh_timer._skip = False
+        # self.logger._auto_refresh_timer._interval = 0.1
         
     async def _on_idle(self, event: events.Idle) -> None:
         
@@ -112,7 +116,9 @@ class LoggerScreen(Screen):
             self.logger.styles.height = self.app.size.height - 3
         else:
             self.logger.styles.height = self.app.size.height - 2
-        
+
+        self.logger.styles.width = self.app.size.width
+
         return await super()._on_idle(event)
         
     BINDINGS = [

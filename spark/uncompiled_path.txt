@@ -5,3 +5,13 @@
 ./_posts/sdf/sdf_post1/sdf_post1.md
 ./_posts/arduino/test2/test2.md
 ./_posts/arduino/test3/test3.md
+./_posts/raspberrypi4/test1/test1.md
+./_posts/raspberrypi4/test2/test2.md
+./_posts/raspberrypi4/test3/test3.md
+./_posts/raspberrypi4/2023-01-23-test post 1.md/2023-01-23-test post 1.md.md
+./_posts/raspberrypi4/2023-02-12-test post 2.md/2023-02-12-test post 2.md.md
+./_posts/raspberrypi4/2023-12-12-test post 3.md/2023-12-12-test post 3.md.md
+./_posts/arduino/arduino post 1/arduino post 1.md
+./_posts/arduino/아두이노 포스팅 2/아두이노 포스팅 2.md
+./_posts/raspberrypi4/zzpost1/zzpost1.md
+./_posts/raspberrypi4/zzpost2/zzpost2.md

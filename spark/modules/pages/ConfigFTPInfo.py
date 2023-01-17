@@ -6,6 +6,8 @@ from TUI import *
 from TUI_DAO import *
 from TUI_Widgets import CheckableListItem
 
+import os
+
 class ConfigFTPInfoProcess(CustomProcess):
     def __init__(self, app: 'TUIApp') -> None:
         super().__init__(app)
@@ -34,10 +36,14 @@ class ConfigFTPInfoProcess(CustomProcess):
 #---------------------------------------------------------------------
 
 async def see_config_info(process:CustomProcess, app:TUIApp):
+    
     infos = load_ftp_info()
+
+    app.print_log('in see config info')
 
     info_str = f"""\
 HOSTNAME: {infos['hostname']}, USERNAME: {infos['username']}, PASSWORD: {infos['password']}
+IMGBASEURL: {infos['imgbaseurl']}
 BASEPATH: {infos['basepath']}, PORT: {infos['port']}, ENCODING: {infos['encoding']}\
 """
     app.alert(info_str)
@@ -87,6 +93,16 @@ async def reconfigure(process:CustomProcess, app:TUIApp):
             prevalue=prev_infos['basepath']
         )
     )
+
+    imgbaseurl = await process.request_input(
+        InputRequest(
+            prompt='Image base URL',
+            help_doc="This is the base URL of URL service provided by your FTP server. ex) http://my-ftp.server.com:8000/list/HDD1/embed/",
+            hint='your image server base URL',
+            essential=True,
+            prevalue=prev_infos['imgbaseurl']
+        )
+    )
     
     port = await process.request_input(
         InputRequest(
@@ -114,6 +130,7 @@ async def reconfigure(process:CustomProcess, app:TUIApp):
     f_ftp_info.write(f'username: {user_name}\n')
     f_ftp_info.write(f'password: {password}\n')
     f_ftp_info.write(f'basepath: {basepath}\n')
+    f_ftp_info.write(f'imgbaseurl: {imgbaseurl}\n')
     f_ftp_info.write(f'port: {port}\n')
     f_ftp_info.write(f'encoding: {encoding}\n')
 
@@ -123,10 +140,29 @@ async def reconfigure(process:CustomProcess, app:TUIApp):
     
     
 def load_ftp_info():
-    f = open('./spark/ftp_info.yml', 'r', encoding='utf-8')
-    raw_info = f.read()
-    f.close()
-    
-    lines = raw_info.split('\n')
-    
-    return {line.split(':')[0] : line.split(':')[1].strip() for line in lines if line != ''}
+    file_path = './spark/ftp_info.yml'
+
+    empty_ret = {
+            'hostname': '',
+            'username': '',
+            'password': '',
+            'basepath': '',
+            'imgbaseurl': '',
+            'port': '',
+            'encoding': '',
+        }
+
+    #return empty string if file not exist
+    if not os.path.isfile(file_path):
+        return 
+    else:
+        f = open(file_path, 'r', encoding='utf-8')
+        raw_info = f.read()
+        f.close()
+
+        lines = raw_info.split('\n')
+
+        ret = {line.split(':')[0] : ':'.join(line.split(':')[1:]).strip() for line in lines if line != ''}
+
+        if len(ret) != len(empty_ret): return empty_ret
+        else: return ret
