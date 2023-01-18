@@ -156,7 +156,6 @@ class name: {class_name}
   is_running: {self.is_running}
   scene_stack: {self.scene_stack}\
 '''
-        self.app.print(current_statue)
     
     async def __run(self, parent=None):
         self.parent = parent
@@ -164,11 +163,10 @@ class name: {class_name}
         
         while True: 
             if self.__abort_process_flag:
-                self.app.print('Abort process flag raised')
                 return self.__process_return
             try: await self.main()
-            except self.InputAborted: self.app.clear_input(); self.app.print('InputAborted')
-            except self.SelectAborted: self.pop_scene(); self.app.print('SelectAborted')
+            except self.InputAborted: self.app.clear_input()
+            except self.SelectAborted: self.pop_scene()
         
     def run(self):
         asyncio.ensure_future(self.__run())
