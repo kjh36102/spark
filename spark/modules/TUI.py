@@ -337,7 +337,7 @@ class TUIApp(App):
         
         scene = message.scene
         
-        if scene.multi_select:
+        if scene.multi_select and len(scene.selected_items) > 0:
             self.target_process.response_select(scene.selected_items)
         
     def on_input_container_submitted(self, message: InputContainer.Submitted):

@@ -606,7 +606,6 @@ def _compile(process:CustomProcess, app:TUIApp, category_name, post_name, regex_
     #기존 파일에서 이미지 주소 변환
     app.print('      Converting local url to embeded url...')
     post_name_without_space = new_post_name.replace(' ', '%20')
-    # raw_f = raw_f.replace(f'title: {post_name}', f'title: {new_post_name}', 1)
     raw_f = regex_instance.sub(f'![\\1]({imgbaseurl}{category_name}/{post_name_without_space}/\\2)', raw_f)
 
     #기존 포스팅 제거
