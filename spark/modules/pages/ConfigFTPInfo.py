@@ -97,7 +97,7 @@ async def reconfigure(process:CustomProcess, app:TUIApp):
     imgbaseurl = await process.request_input(
         InputRequest(
             prompt='Image base URL',
-            help_doc="This is the base URL of URL service provided by your FTP server. ex) http://my-ftp.server.com:8000/list/HDD1/embed/",
+            help_doc="This is the base URL of URL service provided by your FTP server. ex) http://my-ftp.server.com:8000/list/HDD1/embed",
             hint='your image server base URL',
             essential=True,
             prevalue=prev_infos['imgbaseurl']
