@@ -3,6 +3,7 @@ sys.path.append('./spark/modules/')
 sys.path.append('./spark/modules/pages/')
 
 from pages import ConfigGitCommand
+from pages import ConfigFTPInfo
 
 from TUI import *
 from TUI_DAO import *
@@ -487,6 +488,19 @@ async def compile_and_push(process:CustomProcess, app:TUIApp):
     category_name_dic = await process.request_select(category_scene)
     category_names = category_name_dic.values()
     
+    #깃 정보 검사하기
+    git_cmd = ConfigGitCommand.load_git_command()
+    
+    if git_cmd == '':
+        app.alert('You must set the git command before you can use this feature.', 'Error')
+        return
+    
+    #ftp 정보 검사하기
+    if ConfigFTPInfo.load_ftp_info()['hostname'] == '':
+        app.alert('You must configure FTP server info before you can use this feature.', 'Error')
+        return
+    
+    
     #정규식 객체 컴파일
     compiled_compile_re = re.compile(r'\d{4}-\d{2}-\d{2}-.*')
     compiled_url_re = re.compile(r'\!\[(.*)\]\([http].*\/(.*)\)')
@@ -531,22 +545,38 @@ async def compile_and_push(process:CustomProcess, app:TUIApp):
             cnt += 1
         app.hide_loading()    
     
-    #깃 커밋 및 푸쉬
-    git_cmd = ConfigGitCommand.load_git_command()
+    error_flag = False
     
-    cmd_list = list(map(str.strip, git_cmd.split(';')[:-1]) )
-    
-    for cmd in cmd_list:
-        res = subprocess.getstatusoutput(cmd)[1]
-        buf = res.split('\n')
+    #로컬 파일 ftp에 업데이트
+    try:
+        #깃 커밋 및 푸쉬
+        cmd_list = list(map(str.strip, git_cmd.split(';')[:-1]) )
         
-        for line in buf:
-            await asyncio.sleep(0.001)
-            app.print(line)
+        for cmd in cmd_list:
+            res = subprocess.getstatusoutput(cmd)[1]
+            buf = res.split('\n')
+            
+            for line in buf:
+                await asyncio.sleep(0.001)
+                app.print(line)
+    except Exception as e:
+        app.print(f'Error occured while trying to git push: {e}')  
+        error_flag = True
+        
+        
+    try:
+        sync_local_with_FTP(process, app)
+        pass
+    except Exception as e:
+        app.print(f'Error occured while trying to synchronize with FTP server: {e}') 
+        error_flag = True
         
     
     app.print(f'[* Compile And Push Done]')
-    app.alert(f'Successfully compiled and pushed {cnt} posts in whole category.')
+    if error_flag:
+        app.alert(f'Successfully compiled {cnt} posts but there was an unknown error. Check out git command and ftp info.')
+    else:
+        app.alert(f'Successfully compiled and pushed {cnt} posts in whole category.')
     app.close_logger()
     
     
