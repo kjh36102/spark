@@ -1,1 +1,2 @@
 ./_posts/dogs/Let's learn about dachshund/Let's learn about dachshund.md
+./_posts/cats/웃긴 고양이 모음/웃긴 고양이 모음.md
