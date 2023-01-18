@@ -290,7 +290,7 @@ async def compile_post(process:CustomProcess, app:TUIApp):
     imgbaseurl = ftp_info['imgbaseurl']
 
     #정규식 객체 컴파일
-    compiled_re = re.compile(r'\!\[(.*)\]\(([^http].*)\)')
+    compiled_re = re.compile(r'\!\[(.*)\]\(./([^http].*)\)')
 
     app.print(f'[* Compile Post]')
 
@@ -362,7 +362,7 @@ async def decompile_post(process:CustomProcess, app:TUIApp):
         #기존 파일에서 이미지 주소 변환
         app.print('  Converting local url to embeded url...')
         raw_f = raw_f.replace(f'title: {post_name}', f'title: {new_post_name}', 1)
-        raw_f = compiled_re.sub(f'![\\1](\\2)', raw_f)
+        raw_f = compiled_re.sub(f'![\\1](./\\2)', raw_f)
 
         #기존 포스팅 제거
         app.print('  Removing original post...')
@@ -503,7 +503,7 @@ async def compile_and_push(process:CustomProcess, app:TUIApp):
     
     #정규식 객체 컴파일
     compiled_compile_re = re.compile(r'\d{4}-\d{2}-\d{2}-.*')
-    compiled_url_re = re.compile(r'\!\[(.*)\]\(([^http].*)\)')
+    compiled_url_re = re.compile(r'\!\[(.*)\]\(./([^http].*)\)')
     
     #ftp 정보에서 imgbaseurl 가져오기
     ftp_info = ConfigFTPInfo.load_ftp_info()
