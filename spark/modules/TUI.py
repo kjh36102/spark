@@ -87,8 +87,6 @@ class CustomProcess:
         
         #if ther isn't any contents, or new process start
         else:
-
-
             #vanish previous process's scene
             if list_container.target_scene != None:
                 list_container.target_scene.list_view.styles.display = 'none'            
@@ -102,7 +100,9 @@ class CustomProcess:
         self.scene_stack.append(scene)
         
         #set current scene to target
-        list_container.target_scene = scene    
+        list_container.target_scene = scene
+        
+        self.app.set_focus(scene.list_view)
         
         
     def pop_scene(self):
@@ -156,7 +156,7 @@ class name: {class_name}
   is_running: {self.is_running}
   scene_stack: {self.scene_stack}\
 '''
-        self.app.print_log(current_statue)
+        self.app.print(current_statue)
     
     async def __run(self, parent=None):
         self.parent = parent
@@ -164,11 +164,11 @@ class name: {class_name}
         
         while True: 
             if self.__abort_process_flag:
-                self.app.print_log('Abort process flag raised')
+                self.app.print('Abort process flag raised')
                 return self.__process_return
             try: await self.main()
-            except self.InputAborted: self.app.clear_input(); self.app.print_log('InputAborted')
-            except self.SelectAborted: self.pop_scene(); self.app.print_log('SelectAborted')
+            except self.InputAborted: self.app.clear_input(); self.app.print('InputAborted')
+            except self.SelectAborted: self.pop_scene(); self.app.print('SelectAborted')
         
     def run(self):
         asyncio.ensure_future(self.__run())
@@ -254,6 +254,21 @@ class name: {class_name}
         self.pop_scene()
     
         return ret
+
+    #TODO 검색기능 추가해보기    
+    # async def request_search(self):
+    #     #검색 요청 띄우기
+    #     search_name = await self.request_input(
+    #         InputRequest(
+    #             prompt='Search Item',
+    #             help_doc='Enter items to search for. Runs a forward search from the current list cursor. A search term ending in \\ executes a reverse search.',
+    #             hint='ex) my post name, ex) my post name\\',
+    #             essential=True,
+    #             alive=True
+    #         )
+    #     )
+        
+    #     self.app.print('want to search:', search_name)
     
     class InputAborted(Exception): pass
     class SelectAborted(Exception): pass
@@ -334,7 +349,7 @@ class TUIApp(App):
     
     #---------
         
-    def print_log(self, *texts):
+    def print(self, *texts):
         text =' '.join(map(str, texts))
         self.logger_screen.print(text)
     
@@ -375,13 +390,15 @@ class TUIApp(App):
         
     def open_input(self):
         self.main_screen.input_container.show()
+        press(['left','right'])
+        
     
     async def set_input(self, input_request:InputRequest):
         input_container:InputContainer = self.main_screen.input_container
         input_container.set(input_request)
         
     def print_bar(self):
-        self.print_log('----------------------')
+        self.print('----------------------')
 if __name__ == '__main__':
     app = TUIApp()
     app.run()    

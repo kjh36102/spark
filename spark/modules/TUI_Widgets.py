@@ -2,6 +2,8 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from TUI_Widgets import ReactiveLabel, ListContainer
+    from TUI_DAO import Scene
+    from TUI_Elems import CheckableListItem
 
 from TUI_Elems import *
 from TUI_DAO import InputRequest
@@ -10,6 +12,9 @@ from textual.binding import Binding
 from textual.containers import Container
 from textual.widgets import Input
 from textual.message import Message, MessageTarget
+
+import asyncio
+from pyautogui import press
         
 class InputContainer(Container):
     
@@ -156,7 +161,7 @@ class InputContainer(Container):
         self.help_doc_container.styles.height = 'auto'
         
 class ListContainer(Container):
-    def __init__(self, multi_select=False) -> None:
+    def __init__(self) -> None:
         self.target_scene = None
         super().__init__()
     
@@ -175,6 +180,9 @@ class ListContainer(Container):
             self.scene = scene
         
     BINDINGS = [
+        # Binding('ctrl+s', 'search_item', 'search', priority=True),
+        Binding('ctrl+a', 'select_all', 'check all', priority=True),
+        Binding('ctrl+x', 'deselect_all', 'uncheck all', priority=True),
         Binding('enter', 'submit_items', 'submit', key_display='ENTER', priority=True),
         Binding('space', 'select_item', 'select', key_display='SPACE'),
         Binding('escape', 'press_escape', 'back'),
@@ -185,6 +193,21 @@ class ListContainer(Container):
         Binding('home', 'scroll_home', 'home', priority=True),
         Binding('end', 'scroll_end', 'end', priority=True),
     ]
+    
+    #TODO 검색기능 추가해보기
+    # async def action_search_item(self):
+    #     #검색 요청 띄우기
+    #     await asyncio.create_task(self.app.target_process.request_search())
+    
+    async def action_select_all(self):
+        for idx, child in enumerate(self.target_scene.list_view.children):
+            child.check()
+            self.target_scene.selected_items[idx] = child.value
+            
+    async def action_deselect_all(self):
+        for _, child in enumerate(self.target_scene.list_view.children):
+            child.uncheck()
+            self.target_scene.selected_items.clear()
         
     async def action_select_item(self):
         await self.emit(self.Selected(self, self.target_scene))

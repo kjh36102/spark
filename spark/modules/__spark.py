@@ -51,8 +51,7 @@ initialize blog - After clone from github, must run this once.\
         await self.funcs[idx]()
     
     async def create_new_post(self): 
-
-        pass
+        await asyncio.create_task(ManagePost.create_post(self, self.app))
     
     async def advanced_menu(self):
         await self.run_next_process(AdvancedMenu.AdvancedMenuProcess(self.app))

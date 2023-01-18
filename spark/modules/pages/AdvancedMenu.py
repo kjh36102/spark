@@ -33,26 +33,26 @@ class FtpManager:
         err_flag = True
 
         try:
-            self.app.print_log(f'[* Waiting response from {self.hostname}...]')
-            self.app.print_log('  if this takes so long, check out hostname and port.')
+            self.app.print(f'[* Waiting response from {self.hostname}...]')
+            self.app.print('  if this takes so long, check out hostname and port.')
             self.session.connect(host=self.hostname, port=int(self.port))
-            self.app.print_log(f'[* Connected to {self.hostname}]')
+            self.app.print(f'[* Connected to {self.hostname}]')
             self.session.encoding = self.encoding
             self.session.login(user=self.username, passwd=self.password)
 
             self.session.cwd(self.basepath)
             err_flag = False
         except TimeoutError:
-            self.app.print_log('[! Failed to connect. You should check out your hostname and port in ftp_info.yml.]')
+            self.app.print('[! Failed to connect. You should check out your hostname and port in ftp_info.yml.]')
         except ftplib.error_perm as e:
-            if e.args[0][:3] == '530': self.app.print_log('[! Failed to login. Check out your username and password.]')
+            if e.args[0][:3] == '530': self.app.print('[! Failed to login. Check out your username and password.]')
         
         if err_flag: exit(1)
 
     def close(self):
         try: self.session.quit()
         except Exception as e:
-            self.app.print_log('Failed to close FTP: ', e)
+            self.app.print('Failed to close FTP: ', e)
             self.session.close()
 
     #폴더 생성 함수, 존재하면 스킵함
@@ -64,11 +64,11 @@ class FtpManager:
                 self.session.mkd(dir_name)
             except ftplib.error_perm as e:
                 if e.args[0][:3] == '550': pass
-                else: self.app.print_log('ftplib.error_perm: ', e)
+                else: self.app.print('ftplib.error_perm: ', e)
         
             try: self.session.cwd(dir_name)
             except ftplib.error_perm:
-                self.app.print_log('[! Failed to create directory. Check out your basepath in ftp_info.yml]')
+                self.app.print('[! Failed to create directory. Check out your basepath in ftp_info.yml]')
                 exit(1)
 
         if change_dir == False: self.session.cwd(self.basepath)
@@ -81,13 +81,13 @@ class FtpManager:
             names = self.session.nlst(target_dir_path)
         except ftplib.all_errors as e:
             # some FTP servers complain when you try and list non-existent paths
-            self.app.print_log(f'  Could not remove {target_dir_path}: {e}')
+            self.app.print(f'    Could not remove {target_dir_path}: {e}')
             return
 
         for name in names:
             if os.path.split(name)[1] in ('.', '..'): continue
 
-            self.app.print_log(f'  Removing {name}')
+            self.app.print(f'    Removing {name}')
 
             try:
                 self.session.cwd(name)  # if we can cwd to it, it's a folder
@@ -99,12 +99,12 @@ class FtpManager:
         try:
             self.session.rmd(target_dir_path)
         except ftplib.all_errors as e:
-            self.app.print_log(f'  Could not remove {target_dir_path}: {e}')
+            self.app.print(f'    Could not remove {target_dir_path}: {e}')
 
 
         #파일 동기화
-    def synchronize(self, src_path_list, target_path_list):
-        self.app.print_log('[* Start synchronizing local files with the FTP server.]')
+    async def synchronize(self, src_path_list, target_path_list):
+        self.app.print('[* Start synchronizing local files with the FTP server.]')
 
         try:
             #두 리스트 크기가 같은지 확인
@@ -115,7 +115,11 @@ class FtpManager:
 
             actual_work = 0
 
+            self.app.show_loading()
+            loading_i, loading_total = 0, len(src_path_list)
             for src, target in zip(src_path_list, target_path_list):
+                self.app.set_loading_ratio(loading_i/loading_total, msg=f'working on {target}')
+                await asyncio.sleep(0.001)
                 #로딩박스 표시
                 # work_i += 1
                 # self.app.set_loading_ratio(work_i / work_total, f'working on {target}')
@@ -131,6 +135,7 @@ class FtpManager:
 
                 remote_file_sizes = {}  
                 for raw_str in remote_file_infos:   #remote_file_infos 정제
+                    await asyncio.sleep(0.001)
                     file_name = raw_str.split(':')[1][3:]
                     file_size = ' '.join(raw_str.split()).split()[4]
 
@@ -144,6 +149,7 @@ class FtpManager:
                 local_file_sizes = {}
                 
                 for file in local_file_names:
+                    await asyncio.sleep(0.001)
                     local_file_sizes[file] = os.path.getsize(src + file)
 
                 # self.app.print_log('local_file_sizes:', local_file_sizes)
@@ -166,40 +172,49 @@ class FtpManager:
                 # self.app.print_log('need_change_count:', need_change_count)
 
                 if need_change_count > 0:
-                    self.app.print_log(' ')
-                    self.app.print_log('  Src path:  ' + src)
-                    self.app.print_log('  Target path:  ' + target + '\n')
+                    self.app.print(' ')
+                    self.app.print('  Src path:  ' + src)
+                    self.app.print('  Target path:  ' + target + '\n')
 
                 # self.app.print_log('append_list:', append_list)
                 # self.app.print_log('remove_list:', remove_list)
                 # self.app.print_log('update_list:', update_list)
 
+                
                 for file in append_list:
+                    await asyncio.sleep(0.001)
                     # if '.md' in file: continue
-                    self.app.print_log('  + Uploading  ' + file)
+                    self.app.print('  + Uploading  ' + file)
                     self.session.storbinary(f'STOR {file}', open(src + file, 'rb'))
 
                 for file in update_list:
+                    await asyncio.sleep(0.001)
                     # self.app.print_log(f'file name: {file}, local_size: {local_file_sizes[file]}, remote_size: {remote_file_sizes[file]}')
-                    self.app.print_log('  * Updating  ' + file)
+                    self.app.print('  * Updating  ' + file)
                     self.session.storbinary(f'STOR {file}', open(src + file, 'rb')) 
                 
+                
                 for file in remove_list:
-                    self.app.print_log('  - Removing  ' + file)
-                    self.session.delete(file)  
+                    await asyncio.sleep(0.001)
+                    self.app.print('  - Removing  ' + file)
+                    self.session.delete(file) 
 
+                loading_i += 1
+                
+            # 로딩박스 해제
+            self.app.hide_loading()
+            
             if actual_work == 0:
-                self.app.print_log(' ')
-                self.app.print_log('  Nothing to synchronize. Already up to date.')
+                self.app.print(' ')
+                self.app.print('  Nothing to synchronize. Already up to date.')
             
             self.session.cwd(self.basepath)
-            self.app.print_log(' ')
-            self.app.print_log('[* Synchronization is complete.]')
+            self.app.print(' ')
+            self.app.print('[* Synchronization is complete.]')
 
-            #로딩박스 해제
-            # self.app.hide_loading()
+            
         except Exception as e:
-            self.app.print_log(f'  Error while uploading file:{src} , e:{e}')
+            self.app.print(f'  Error while uploading file:{src} , e:{e}')
 
     def convert_path(src):
         # if src
@@ -220,7 +235,6 @@ class AdvancedMenuProcess(CustomProcess):
             self.Compile_post,
             self.Decompile_post,
             self.Sync_local_with_FTP,
-            self.Sync_FTP_with_local
         ]
 
         func_names = get_func_names(self.funcs)
@@ -235,24 +249,15 @@ class AdvancedMenuProcess(CustomProcess):
         await self.funcs[idx]()
 
 
-    async def Compile_post(self): await compile_post(self, self.app)
-    async def Decompile_post(self): await decompile_post(self, self.app)
+    async def Compile_post(self): 
+        await asyncio.create_task(compile_post(self, self.app))
+        # await compile_post(self, self.app)
+    async def Decompile_post(self): 
+        await asyncio.create_task(decompile_post(self, self.app))
+        # await decompile_post(self, self.app)
     async def Sync_local_with_FTP(self):
-        
-        # self.app.print_bar()
-
-        # for i in range(20):
-        #     self.app.print_log('gimotti', i)
-
-        # await asyncio.sleep(0.1)
-
-        loop = asyncio.get_running_loop()
-        loop.run_until_complete(sync_local_with_FTP(self, self.app))
-
-        # await asyncio.create_task(sync_local_with_FTP(self, self.app))
-
-    async def Sync_FTP_with_local(self): await sync_ftp_with_local(self, self.app)
-
+        await asyncio.create_task(sync_local_with_FTP(self, self.app))
+        # await sync_local_with_FTP(self, self.app)
 
 async def compile_post(process:CustomProcess, app:TUIApp):
     #get category scene
@@ -270,7 +275,7 @@ async def compile_post(process:CustomProcess, app:TUIApp):
 
     #포스트가 하나도 없으면 탈출
     if post_scene == None:
-        app.alert(f"You haven't created any posts in the category:{selected_category} yet.")
+        app.alert(f"It seems there is no compilable posts in this category:{selected_category}")
         return
 
     #비컴파일 포스트 가져오기
@@ -289,58 +294,61 @@ async def compile_post(process:CustomProcess, app:TUIApp):
     loading_i, loading_max = 0, len(uncompiled_list)
 
     for _, post_name in uncompiled_list:
-        app.print_log('---------------------')
+        app.print('---------------------')
 
         #로딩박스 표시
         loading_i += 1
         app.set_loading_ratio(loading_i/loading_max, f'Converting {post_name}...')
 
         #기존 포스트 경로 가져오기
-        app.print_log(f'Compile target post:{post_name}')
+        app.print(f'Compile target post:{post_name}')
         post_dir = f'./_posts/{selected_category}/{post_name}/'
         post_path = post_dir + f'{post_name}.md'
 
         #파일 이름 앞에 날짜 붙이기
-        app.print_log('  Changing file name...')
+        app.print('  Changing file name...')
         date_str = datetime.now().strftime('%Y-%m-%d')
         new_post_name = f'{date_str}-{post_name}'
 
         #기존 파일 읽기
-        app.print_log('  Reading original file content...')
+        app.print('  Reading original file content...')
+        app.print('post_path:', post_path)
         f = open(post_path, 'r', encoding='utf-8')
         raw_f = f.read()
         f.close()
 
         #기존 파일에서 이미지 주소 변환
-        app.print_log('  Converting local url to embeded url...')
+        app.print('  Converting local url to embeded url...')
         post_name_without_space = new_post_name.replace(' ', '%20')
         raw_f = raw_f.replace(f'title: {post_name}', f'title: {new_post_name}', 1)
         raw_f = compiled_re.sub(f'![\\1]({imgbaseurl}{selected_category}/{post_name_without_space}/\\2)', raw_f)
 
         #기존 포스팅 제거
-        app.print_log('  Removing original post...')
+        app.print('  Removing original post...')
         os.remove(post_path)
 
         #새로운 포스팅 추가
-        app.print_log('  Writing new post...')
+        app.print('  Writing new post...')
         f = open(post_dir + f'{new_post_name}.md', 'w', encoding='utf-8')
         f.write(raw_f)
         f.close()
 
         #폴더 이름 변경
-        app.print_log('  Changing post dir name...')
+        app.print('  Changing post dir name...')
         new_post_dir = f'./_posts/{selected_category}/{new_post_name}/'
         os.renames(post_dir, new_post_dir)
 
-        app.print_log(f'    Compile {post_name} is done!')
+        app.print(f'    Compile {post_name} is done!')
+        
+        await asyncio.sleep(0.3)
 
     app.hide_loading()
     app.open_logger(lock=False)
-    app.alert('Compiling all done.')
+    # app.alert('Compiling all done.')
 
 async def decompile_post(process:CustomProcess, app:TUIApp):
         #get category scene
-    category_scene = ManageCategory.get_category_select_scene(prompt='Compile Post')
+    category_scene = ManageCategory.get_category_select_scene(prompt='Decompile Post')
 
     #if there is no category
     if category_scene == None:
@@ -350,11 +358,11 @@ async def decompile_post(process:CustomProcess, app:TUIApp):
     _, selected_category = await process.request_select(category_scene)
 
     #get post select scene
-    post_scene = ManagePost.get_post_list_scene(selected_category, prompt='Compile Post', compiled=True, multi_select=True)
+    post_scene = ManagePost.get_post_list_scene(selected_category, prompt='Decompile Post', compiled=True, multi_select=True)
 
     #포스트가 하나도 없으면 탈출
     if post_scene == None:
-        app.alert(f"You haven't created any posts in the category:{selected_category} yet.")
+        app.alert(f"It seems there is no decompilable posts in this category:{selected_category}")
         return
 
     #컴파일 포스트 가져오기
@@ -373,62 +381,64 @@ async def decompile_post(process:CustomProcess, app:TUIApp):
     loading_i, loading_max = 0, len(compiled_list)
 
     for _, post_name in compiled_list:
-        app.print_log('---------------------')
+        app.print('---------------------')
 
         #로딩박스 표시
         loading_i += 1
         app.set_loading_ratio(loading_i/loading_max, f'Converting {post_name}...')
 
         #기존 포스트 경로 가져오기
-        app.print_log(f'Decompile target post:{post_name}')
+        app.print(f'Decompile target post:{post_name}')
         post_dir = f'./_posts/{selected_category}/{post_name}/'
         post_path = post_dir + f'{post_name}.md'
 
         #파일 이름 앞에 날짜 떼기
-        app.print_log('  Changing file name...')
+        app.print('  Changing file name...')
         new_post_name = '-'.join(post_name.split('-')[3:])
 
         #기존 파일 읽기
-        app.print_log('  Reading original file content...')
+        app.print('  Reading original file content...')
         f = open(post_path, 'r', encoding='utf-8')
         raw_f = f.read()
         f.close()
 
         #기존 파일에서 이미지 주소 변환
-        app.print_log('  Converting local url to embeded url...')
+        app.print('  Converting local url to embeded url...')
         raw_f = raw_f.replace(f'title: {post_name}', f'title: {new_post_name}', 1)
         raw_f = compiled_re.sub(f'![\\1](\\2)', raw_f)
 
         #기존 포스팅 제거
-        app.print_log('  Removing original post...')
+        app.print('  Removing original post...')
         os.remove(post_path)
 
         #새로운 포스팅 추가
-        app.print_log('  Writing new post...')
+        app.print('  Writing new post...')
         f = open(post_dir + f'{new_post_name}.md', 'w', encoding='utf-8')
         f.write(raw_f)
         f.close()
 
         #폴더 이름 변경
-        app.print_log('  Changing post dir name...')
+        app.print('  Changing post dir name...')
         new_post_dir = f'./_posts/{selected_category}/{new_post_name}/'
         os.renames(post_dir, new_post_dir)
 
-        app.print_log(f'    Decompile {post_name} is done!')
+        app.print(f'    Decompile {post_name} is done!')
+        
+        await asyncio.sleep(0.3)
 
     app.hide_loading()
     app.open_logger(lock=False)
-    app.alert('Decompiling all done.')
+    # app.alert('Decompiling all done.')
 
 async def sync_local_with_FTP(process:CustomProcess, app:TUIApp):
-    app.open_logger(lock=False)
+    app.open_logger(lock=True)
     app.print_bar()
 
     #ftp 연결
     ftp = FtpManager(app)
     ftp.connect()
     
-    app.print_log('Preparing data....')
+    app.print('Preparing data....')
 
     local_base_path = './_posts/'
 
@@ -446,59 +456,67 @@ async def sync_local_with_FTP(process:CustomProcess, app:TUIApp):
     remote_category_need_delete_set = remote_category_set - local_category_set
 
     #리모트 카테고리 지우기
-    app.print_log('Removing non-exist category and post on server...')
+    app.print('Removing all non-exist category...')
     for category_need_delete in remote_category_need_delete_set:
+        await asyncio.sleep(0.001)
         ftp.rmdir(category_need_delete)
+        
+
+    if len(remote_category_need_delete_set) == 0:
+        app.print(' No categories to be deleted')
 
     #카테고리 다시 가져오기
     remote_categories = ftp.session.nlst()
-
-    #TODO 각 카테고리 순회하며 지워야할 포스팅 구하기
-    for category in remote_categories:
-
+    
+    app.print('Removing all non-exist posts from each category...')
+    
+    for i, category in enumerate(remote_categories):
+        await asyncio.sleep(0.001)
+        app.print(f'  Searching inside category {category}...')
+        
         remote_post_set = set(ftp.session.nlst(category))
         local_post_set = set([f'{category}/{post}' for post in os.listdir('./_posts/'+category)])
 
-        # app.print_log('remote_post_set:', remote_post_set)
-        # app.print_log('local_post_set:', local_post_set)
-
         remote_post_need_delete_set = remote_post_set - local_post_set
 
+        app.show_loading()
+        loading_i, loading_total = 0, len(remote_post_need_delete_set)
         for post in remote_post_need_delete_set:
+            app.set_loading_ratio(loading_i/loading_total, msg=f'removing {post}')
             ftp.rmdir(post)
-
-    if len(remote_category_need_delete_set) + len(remote_post_need_delete_set) == 0:
-        app.print_log('  Nothing to remove.')
+        app.hide_loading()
         
+        if len(remote_post_need_delete_set) == 0:
+            app.print('   No posts to be deleted')
+    
     src_list = []
     target_list = []
     
     #로컬 카테고리 순회
-    app.print_log('Building update list...')
+    app.print('Building update list...')
     for category_name in local_categories:
+        await asyncio.sleep(0.001)
+
+        post_list = os.listdir(local_base_path + category_name)
 
         #카테고리 내부 포스트 이름 순회
-        for post_name in os.listdir(local_base_path + category_name):
+        app.show_loading()
+        loading_i, loading_total = 0, len(post_list)
+        for post_name in post_list:
+            await asyncio.sleep(0.001)
+            app.set_loading_ratio(loading_i/loading_total, msg=f'working on {post_name}')
+            
             post_path = local_base_path + category_name + '/' + post_name + '/'
 
             target = post_path.split('_posts/')[1]
 
-            # src, target = ftp.convert_path(post_path)
-
             src_list.append(post_path)
             target_list.append(target)
+        app.hide_loading()
 
     #업로드
-    ftp.synchronize(src_list, target_list)
+    await asyncio.create_task(ftp.synchronize(src_list, target_list))
     ftp.close()
 
     app.open_logger(lock=False)
-
-    return None
     pass
-
-
-async def sync_ftp_with_local(process:CustomProcess, app:TUIApp):
-    
-    pass
-

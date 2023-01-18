@@ -1,7 +1,7 @@
 from TUI_Elems import CheckableListItem
 
 class InputRequest:
-    def __init__(self, prompt, help_doc='', hint='', default=None, password=False, essential=False, prevalue=''):
+    def __init__(self, prompt, help_doc='', hint='', default=None, password=False, essential=False, prevalue='', alive=False):
         self.prompt = prompt
         self.help_doc = help_doc
         self.hint = hint
@@ -9,6 +9,7 @@ class InputRequest:
         self.password = password
         self.prevalue = prevalue
         self.essential = essential
+        self.alive = alive
         
 class Scene:
     def __init__(self, items, main_prompt='Select what you want', help_prompt='Show Help Doc', help_title='', help_doc='', cursor=0, multi_select=False) -> None:

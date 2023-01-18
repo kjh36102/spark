@@ -6,7 +6,7 @@ from textual.containers import Container
 from textual.reactive import reactive
 from typing import Type
 from pyautogui import press
-from threading import Thread
+import asyncio
 
 class ReactiveLabel(Label):
 
@@ -158,7 +158,7 @@ ListItem {
         self.loading_box = ReactiveLabel('[■■■■■■■■■■■■■■■■■] some loading box message', id='loading_box')
 
         #main elements
-        self.list = ListView(*[CheckableListItem(f'hi{i}') for i in range(30)])
+        self.list = ListView(*[CheckableListItem(f'empty') for i in range(1)])
         self.list_container = Container(
             self.list,
             id='list_container'
@@ -193,9 +193,11 @@ ListItem {
         self.help_prompt = ''
         self.logger_prompt = ''
 
-        self.input_requests = []
-        self.input_responses = [] #0: request, 1: value
-        self.selected_items = None #tuple (scene, (idx, val)) | (scene, {idxs, vals})
+        # self.input_requests = []
+        # self.input_responses = [] #0: request, 1: value
+        self.current_process = None
+        self.current_input_request = None
+        self.selected_items = {} #tuple (scene, (idx, val)) | (scene, {idxs, vals})
         self.scenes = []
 
     def on_ready(self):
@@ -204,9 +206,9 @@ ListItem {
         self.set_focus(self.list)
         press('ctrl')    #for after use this faster
 
-        #test base scene
-        scene = Scene(items=[f'base{i}' for i in range(20)])
-        self.push_scene(scene)
+        # #test base scene
+        # scene = Scene(items=[f'base{i}' for i in range(20)])
+        # self.push_scene(scene)
 
     def compose(self):
         yield self.outer_prompt
@@ -218,7 +220,6 @@ ListItem {
         self.resize()
         return await super()._on_resize(event)
 
-
     def _on_idle(self) -> None:
         if self.screen_state == 1:
             self.logger.write('Enter on resize')
@@ -227,22 +228,41 @@ ListItem {
 
     #when input submitted
     def on_input_submitted(self, message: Input.Submitted):
-        #if exist get first input_request
-        if self.input_requests.__len__() > 0:
-            request = self.input_requests[0]
+        #if there is no request return
+        if self.current_input_request == None:
+            self.close_input()
+            return
+        
+        #check essential
+        if message.value == '':
+            if self.current_input_request.essential: return
+            else: 
+                self.input_box.value = self.current_input_request.default
+                self.current_process.allow_get_input = True
+        else:
+            self.current_process.allow_get_input = True
+        
+        self.clear_input()
+        
+        
+        
+        # #if exist get first input_request
+        # if self.input_requests.__len__() > 0:
+        #     request = self.input_requests[0]
 
-            #check essential
-            if message.value == '':
-                if request.essential: return
-                else: self.input_responses.append((request, request.default))
-            else:
-                self.input_responses.append((request, message.value))
+        #     #check essential
+        #     if message.value == '':
+        #         if request.essential: return
+        #         else: self.input_responses.append((request, request.default))
+        #     else:
+        #         self.input_responses.append((request, message.value))
 
-            #push next request
-            self.push_next_input_request()
+        #     #push next request
+        #     self.push_next_input_request()
 
     #on select list item
     def on_list_view_selected(self, message: ListView.Selected):
+        self.print('list view selected:', message.item)
         self.selected_items[self.scenes[-1]] = (self.list.index, message.item.value)
 
     def resize(self):
@@ -254,8 +274,10 @@ ListItem {
         Binding('m', 'show_list', 'main'),
         Binding('i', 'toggle_input', 'input'),
         Binding('escape', 'press_esc', 'back'),
+        Binding('space', 'press_space', 'select'),
         Binding('ctrl+a', 'test1', 'test1'),
         Binding('ctrl+x', 'test2', 'test2'),
+        Binding('ctrl+b', 'test3', 'test3'),
     ]
 
     def action_test1(self):
@@ -287,6 +309,9 @@ ListItem {
         )
         pass
 
+    def action_test3(self):
+        
+        self.print('test print')
 
     def action_show_help(self):
         self.screen_state = 1
@@ -314,6 +339,11 @@ ListItem {
         if self.show_input: self.close_input()
         elif self.screen_state != 0: self.action_show_list()
         else: self.pop_scene()
+        
+    def action_press_space(self):
+        #send select event
+        if self.screen_state == 0:
+            self.list.action_select_cursor()
 
     def open_input(self):
         self.show_input = True
@@ -355,6 +385,10 @@ ListItem {
         self.help_container.mount(self.help_title, self.help_content)
 
     def push_scene(self, scene:Scene):
+        # try:
+        #     if scene is self.scenes[-1]: return
+        # except IndexError: pass
+        
         #changing prompts and apply
         self.__set_outer_prompt(scene)
 
@@ -362,8 +396,8 @@ ListItem {
         self.list.styles.display = 'none'
 
         #mount new list
-        self.list_container.mount(scene.list_view)
         self.list = scene.list_view
+        self.list_container.mount(self.list)
         self.scenes.append(scene)
 
         #set focus on new list
@@ -394,18 +428,18 @@ ListItem {
             #pop last scene from stack
             self.scenes.pop()
 
-    def __set_input(self, request:InputRequest):
+    def set_input(self, request:InputRequest):
         self.input_prompt.value = request.input_prompt
         self.input_help.value = request.input_help
         self.input_box.placeholder = request.hint
         self.input_box.value = request.prevalue
         self.input_box.password = request.password
+        
+        self.current_input_request = request
 
     def clear_input(self):
-        self.input_requests.clear()
-        self.input_responses.clear()
-
-        self.__set_input(InputRequest(input_prompt='There is no input request'))
+        self.set_input(InputRequest(input_prompt='There is no input request'))
+        self.current_input_request = None
 
     def request_input(self, request:InputRequest):
         self.input_requests.append(request)
@@ -418,32 +452,93 @@ ListItem {
 
         request:InputRequest = self.input_requests.pop(0)
 
-        self.__set_input(request)
-
+        self.set_input(request)
+        
+    def print(self, *args):
+        text = ' '.join(map(str,args))
+        self.logger.write(text)
+        
+    def get_input(self):
+        ret = self.input_box.value
+        self.clear_input()
+        return ret
+    
+    def run_custom_process(self, process):
+        self.current_process = process
+        self.current_process.run()
+        
+    
+        
 import time
 
-class CustomProcess(Thread):
+class CustomProcess:
     def __init__(self, app:TerminalApp) -> None:
-        super().__init__(daemon=True)
         self.app = app
+        self.allow_get_select = False
+        self.allow_get_input = False
+        self.abort_select = False
+        self.abort_input = False
+        self.is_waiting_select = False
+        self.is_waiting_input = False
 
-    def get_input(self, count=1, polling_rate=0.1):
+    async def main(self):
+        pass
+    
+    def run(self):
+        asyncio.ensure_future(self.main())
 
-        ret_buf = []
-        for _ in range(count):
-            while self.app.input_responses.__len__() == 0: time.sleep(polling_rate)
-            ret_buf.append(self.app.input_responses.pop(0))
+    class InputAborted(Exception): pass
+    class SelectAborted(Exception): pass
+
+    async def request_input(self, request, polling=0.2):
         
-        return ret_buf
+        self.app.set_input(request)
+        
+        self.is_waiting_input = True
+        while self.allow_get_input == False: 
+            
+            if self.abort_input:
+                self.abort_input = False
+                self.is_waiting_input = False
+                raise self.InputAborted
+            
+            asyncio.sleep(polling)
+        
+        #now get input
+        value = self.app.get_input()
+        self.allow_get_input = False
+        
+        return value
+    
+    async def request_select(self, scene, polling=0.2):
+        self.app.push_scene()
+    
+    # async def get_input(self, count=1, polling_rate=0.1):
 
-    def get_select(self, scene:Scene, polling_rate=0.05):
-        while self.app.selected_items == None: time.sleep(polling_rate)
+    #     ret_buf = []
+    #     for _ in range(count):
+    #         while self.app.input_responses.__len__() == 0: await asyncio.sleep(polling_rate)
+    #         ret_buf.append(self.app.input_responses.pop(0))
+        
+    #     return ret_buf
 
-        response_scene, selected = self.app.selected_items
+    # async def get_select(self, scene:Scene, polling_rate=0.1):
+    #     self.app.print('waiting for user select...')
+    #     while self.app.selected_items.__len__() == 0: await asyncio.sleep(polling_rate)
 
-        if scene != response_scene: return None
+    #     response_scene, selected = self.app.selected_items
 
-        return selected
+    #     if scene != response_scene: return None
+
+    #     self.app.print('  selected value:', selected)
+
+    #     return selected
+    
+    # async def request_input(self, request):
+    #     self.app.request_input(request)
+    
+    # async def push_scene(self, scene):
+    #     self.app.push_scene(scene)
 
 
 class TestProcess(CustomProcess):
@@ -467,9 +562,24 @@ class TestProcess(CustomProcess):
                 # multi_select=True
             )
 
-    def run(self):
+    async def main(self):
         while True:
             #TODO 입력 요청해야함 push scene?, multiselect값 받는것도 해야함
+            
+            received = await self.request_input(
+                InputRequest(
+                    input_prompt='Input to log',
+                    input_help='no help',
+                    hint='anything',
+                    # default='default',
+                    essential=True,
+                    prevalue='zz'
+                )
+            )
+            
+            self.app.print('  input received:', received)
+            
+            pass
 
     def func1(self):
         self.app.logger.write('called func1')
@@ -484,13 +594,17 @@ class TestProcess(CustomProcess):
         self.app.logger.write('called func4')
 
 
-
-
-
+class MyTestApp(TerminalApp):
+    def __init__(self, driver_class: Type[Driver] | None = None, css_path=None, watch_css: bool = False):
+        super().__init__(driver_class, css_path, watch_css)
+        
+    def on_ready(self):
+        super().on_ready()
+        self.run_custom_process(TestProcess(self.app))
 
 
 if __name__ == '__main__':
-    app = TerminalApp()
+    app = MyTestApp()
     app.run()
 
 

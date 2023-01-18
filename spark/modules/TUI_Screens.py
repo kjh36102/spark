@@ -192,7 +192,7 @@ class MainScreen(Screen):
         Binding('i', 'toggle_input_container', 'toggle input'),
         Binding('l', 'push_screen("logger")', 'open logger'),
         Binding('h', 'open_help', 'open help'),
-        Binding('r', 'release_focus', 'release focus'),
+        # Binding('r', 'release_focus', 'release focus'),
     ]
     
     def action_open_help(self):
@@ -205,8 +205,8 @@ class MainScreen(Screen):
         else: 
             self.input_container.hide()
             
-    def action_release_focus(self):
-        self.app.set_focus(None)
+    # def action_release_focus(self):
+    #     self.app.set_focus(None)
         
 class AlertScreen(Screen):
     BINDINGS = [

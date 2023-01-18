@@ -39,7 +39,7 @@ async def see_config_info(process:CustomProcess, app:TUIApp):
     
     infos = load_ftp_info()
 
-    app.print_log('in see config info')
+    app.print('in see config info')
 
     info_str = f"""\
 HOSTNAME: {infos['hostname']}, USERNAME: {infos['username']}, PASSWORD: {infos['password']}
