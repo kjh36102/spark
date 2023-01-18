@@ -2,6 +2,8 @@ import sys
 sys.path.append('./spark/modules/')
 sys.path.append('./spark/modules/pages/')
 
+from pages import ConfigGitCommand
+
 from TUI import *
 from TUI_DAO import *
 from TUI_Widgets import CheckableListItem
@@ -12,8 +14,8 @@ import ManagePost
 
 from datetime import datetime
 import os
-import shutil
 import re
+import subprocess
 
 import ftplib
 class FtpManager:
@@ -289,62 +291,21 @@ async def compile_post(process:CustomProcess, app:TUIApp):
     #정규식 객체 컴파일
     compiled_re = re.compile(r'\!\[(.*)\]\(([^http].*)\)')
 
+    app.print(f'[* Compile Post]')
+
     app.open_logger(lock=True)
     app.show_loading()
     loading_i, loading_max = 0, len(uncompiled_list)
-
     for _, post_name in uncompiled_list:
-        app.print('---------------------')
-
-        #로딩박스 표시
-        loading_i += 1
         app.set_loading_ratio(loading_i/loading_max, f'Converting {post_name}...')
-
-        #기존 포스트 경로 가져오기
-        app.print(f'Compile target post:{post_name}')
-        post_dir = f'./_posts/{selected_category}/{post_name}/'
-        post_path = post_dir + f'{post_name}.md'
-
-        #파일 이름 앞에 날짜 붙이기
-        app.print('  Changing file name...')
-        date_str = datetime.now().strftime('%Y-%m-%d')
-        new_post_name = f'{date_str}-{post_name}'
-
-        #기존 파일 읽기
-        app.print('  Reading original file content...')
-        app.print('post_path:', post_path)
-        f = open(post_path, 'r', encoding='utf-8')
-        raw_f = f.read()
-        f.close()
-
-        #기존 파일에서 이미지 주소 변환
-        app.print('  Converting local url to embeded url...')
-        post_name_without_space = new_post_name.replace(' ', '%20')
-        raw_f = raw_f.replace(f'title: {post_name}', f'title: {new_post_name}', 1)
-        raw_f = compiled_re.sub(f'![\\1]({imgbaseurl}{selected_category}/{post_name_without_space}/\\2)', raw_f)
-
-        #기존 포스팅 제거
-        app.print('  Removing original post...')
-        os.remove(post_path)
-
-        #새로운 포스팅 추가
-        app.print('  Writing new post...')
-        f = open(post_dir + f'{new_post_name}.md', 'w', encoding='utf-8')
-        f.write(raw_f)
-        f.close()
-
-        #폴더 이름 변경
-        app.print('  Changing post dir name...')
-        new_post_dir = f'./_posts/{selected_category}/{new_post_name}/'
-        os.renames(post_dir, new_post_dir)
-
-        app.print(f'    Compile {post_name} is done!')
-        
-        await asyncio.sleep(0.3)
+        loading_i += 1
+        asyncio.sleep(0.001)
+        _compile(process, app, selected_category, post_name, compiled_re, imgbaseurl)
 
     app.hide_loading()
     app.open_logger(lock=False)
-    # app.alert('Compiling all done.')
+    app.print(f'[* Compile Post Done]')
+    app.alert(f'Compiling {loading_max} posts in category {selected_category} all done.')
 
 async def decompile_post(process:CustomProcess, app:TUIApp):
         #get category scene
@@ -382,13 +343,12 @@ async def decompile_post(process:CustomProcess, app:TUIApp):
 
     for _, post_name in compiled_list:
         app.print('---------------------')
-
-        #로딩박스 표시
-        loading_i += 1
         app.set_loading_ratio(loading_i/loading_max, f'Converting {post_name}...')
+        loading_i += 1
+        await asyncio.sleep(0.001)
 
         #기존 포스트 경로 가져오기
-        app.print(f'Decompile target post:{post_name}')
+        app.print(f'    Decompile target post:{post_name}')
         post_dir = f'./_posts/{selected_category}/{post_name}/'
         post_path = post_dir + f'{post_name}.md'
 
@@ -422,13 +382,11 @@ async def decompile_post(process:CustomProcess, app:TUIApp):
         new_post_dir = f'./_posts/{selected_category}/{new_post_name}/'
         os.renames(post_dir, new_post_dir)
 
-        app.print(f'    Decompile {post_name} is done!')
+        app.print(f'      Decompile {post_name} is done!')
         
-        await asyncio.sleep(0.3)
-
     app.hide_loading()
     app.open_logger(lock=False)
-    # app.alert('Decompiling all done.')
+    app.alert(f'Compiling {loading_max} posts in category {selected_category} all done.')
 
 async def sync_local_with_FTP(process:CustomProcess, app:TUIApp):
     app.open_logger(lock=True)
@@ -520,3 +478,124 @@ async def sync_local_with_FTP(process:CustomProcess, app:TUIApp):
 
     app.open_logger(lock=False)
     pass
+
+async def compile_and_push(process:CustomProcess, app:TUIApp):
+    #카테고리 멀티 선택 메뉴 보여주기
+    category_scene = ManageCategory.get_category_select_scene('Compile And Push', multi_select=True, include_uncategorized=True)
+    
+    if category_scene == None: 
+        app.alert('You have not created any categories yet.', 'Error')
+        return
+    
+    #선택한 카테고리들 가져오기
+    category_name_dic = await process.request_select(category_scene)
+    category_names = category_name_dic.values()
+    
+    #정규식 객체 컴파일
+    compiled_compile_re = re.compile(r'\d{4}-\d{2}-\d{2}-.*')
+    compiled_url_re = re.compile(r'\!\[(.*)\]\([http].*\/(.*)\)')
+    
+    #ftp 정보에서 imgbaseurl 가져오기
+    ftp_info = ConfigFTPInfo.load_ftp_info()
+    imgbaseurl = ftp_info['imgbaseurl']
+    
+    #모든 카테고리 순회
+    app.open_logger(lock=False)
+    
+    app.print(f'[* Compile And Push]')
+   
+    cnt = 0
+   
+    for category_name in category_names:
+        app.print(f'  Checking inside category {category_name}')
+        
+        #포스트 이름 가져오기
+        category_dir = f'./_posts/{category_name}'
+        try:
+            post_list = os.listdir(category_dir)
+        except FileNotFoundError:
+            os.makedirs(category_dir)
+        finally: post_list = os.listdir(category_dir)
+        
+        #디컴파일 된것만 추출하기
+        post_list = [post for post in post_list if not bool(compiled_compile_re.match(post))]
+        
+        if len(post_list) == 0:
+            app.print('    Nothing to compile.')
+            continue
+        
+        app.show_loading()
+        loading_i, loading_total = 0, len(post_list)
+        for post_name in post_list:
+            app.set_loading_ratio(loading_i / loading_total, msg=f'removing {post_name}')
+            loading_i += 1
+            await asyncio.sleep(0.001)
+            
+            _compile(process, app, category_name, post_name, compiled_url_re, imgbaseurl)
+            cnt += 1
+        app.hide_loading()    
+    
+    #깃 커밋 및 푸쉬
+    git_cmd = ConfigGitCommand.load_git_command()
+    
+    cmd_list = list(map(str.strip, git_cmd.split(';')[:-1]) )
+    
+    for cmd in cmd_list:
+        res = subprocess.getstatusoutput(cmd)[1]
+        buf = res.split('\n')
+        
+        for line in buf:
+            await asyncio.sleep(0.001)
+            app.print(line)
+        
+    
+    app.print(f'[* Compile And Push Done]')
+    app.alert(f'Successfully compiled and pushed {cnt} posts in whole category.')
+    app.close_logger()
+    
+    
+    
+    pass
+
+def _compile(process:CustomProcess, app:TUIApp, category_name, post_name, regex_instance, imgbaseurl):
+    app.print('---------------------')
+    
+    #기존 포스트 경로 가져오기
+    post_dir = f'./_posts/{category_name}/{post_name}/'
+    post_path = post_dir + f'{post_name}.md'
+    
+    app.print(f'    Compiling target post: {post_dir}')
+
+    #파일 이름 앞에 날짜 붙이기
+    # app.print('  Changing file name...')
+    date_str = datetime.now().strftime('%Y-%m-%d')
+    new_post_name = f'{date_str}-{post_name}'
+
+    #기존 파일 읽기
+    # app.print('  Reading original file content...')
+    f = open(post_path, 'r', encoding='utf-8')
+    raw_f = f.read()
+    f.close()
+
+    #기존 파일에서 이미지 주소 변환
+    app.print('      Converting local url to embeded url...')
+    post_name_without_space = new_post_name.replace(' ', '%20')
+    raw_f = raw_f.replace(f'title: {post_name}', f'title: {new_post_name}', 1)
+    raw_f = regex_instance.sub(f'![\\1]({imgbaseurl}{category_name}/{post_name_without_space}/\\2)', raw_f)
+
+    #기존 포스팅 제거
+    app.print('      Removing original post...')
+    os.remove(post_path)
+
+    #새로운 포스팅 추가
+    app.print('      Writing new post...')
+    f = open(post_dir + f'{new_post_name}.md', 'w', encoding='utf-8')
+    f.write(raw_f)
+    f.close()
+
+    #폴더 이름 변경
+    app.print('      Changing post dir name...')
+    new_post_dir = f'./_posts/{category_name}/{new_post_name}/'
+    os.renames(post_dir, new_post_dir)
+
+    app.print(f'        Compile {post_name} is done!')

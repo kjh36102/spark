@@ -8,21 +8,22 @@ from pages import ConfigFTPInfo
 from pages import AdvancedMenu
 from pages import ManageCategory
 from pages import ManagePost
+from pages import ConfigGitCommand
     
 class Main(CustomProcess):
     def __init__(self, app: 'TUIApp', *args) -> None:
         super().__init__(app, *args)
 
         self.funcs = [
-            self.create_new_post,
-            self.commit_and_push,
-            self.advanced_menu,
-            self.manage_post,
-            self.manage_category,
-            self.config_ftp_info,
-            self.config_git_info,
-            self.config_blog_info,
-            self.initialize_blog,
+            self.Create_new_post,
+            self.Compile_and_push,
+            self.Advanced_menu,
+            self.Manage_post,
+            self.Manage_category,
+            self.Config_ftp_info,
+            self.Config_git_command,
+            self.Config_blog_info,
+            self.Initialize_blog,
         ]
         
         help_doc ='''\
@@ -50,30 +51,30 @@ initialize blog - After clone from github, must run this once.\
         idx, val = await self.request_select(self.main_scene)
         await self.funcs[idx]()
     
-    async def create_new_post(self): 
+    async def Create_new_post(self): 
         await asyncio.create_task(ManagePost.create_post(self, self.app))
     
-    async def advanced_menu(self):
+    async def Advanced_menu(self):
         await self.run_next_process(AdvancedMenu.AdvancedMenuProcess(self.app))
     
-    async def commit_and_push(self): pass
+    async def Compile_and_push(self): 
+        await asyncio.create_task(AdvancedMenu.compile_and_push(self, self.app))
     
-    async def manage_post(self): 
+    async def Manage_post(self): 
         await self.run_next_process(ManagePost.ManagePostProcess(self.app))
-        pass
     
-    async def manage_category(self): 
+    async def Manage_category(self): 
         await self.run_next_process(ManageCategory.ManageCategoryProcess(self.app))
-        pass
     
-    async def config_git_info(self): pass
+    async def Config_git_command(self): 
+        await self.run_next_process(ConfigGitCommand.ConfigGitCommandProcess(self.app))
     
-    async def config_blog_info(self): pass
+    async def Config_blog_info(self): pass
     
-    async def config_ftp_info(self):
+    async def Config_ftp_info(self):
         await self.run_next_process(ConfigFTPInfo.ConfigFTPInfoProcess(self.app))
     
-    async def initialize_blog(self):
+    async def Initialize_blog(self):
         pass
     
 class Spark(TUIApp):

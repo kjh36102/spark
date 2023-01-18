@@ -342,6 +342,9 @@ class TUIApp(App):
         
     def on_input_container_submitted(self, message: InputContainer.Submitted):
             if self.target_process.is_waiting_input:
+                
+                
+                
                 self.target_process.response_input(message.value)
     
     def on_input_container_aborted(self, message: InputContainer.Aborted):

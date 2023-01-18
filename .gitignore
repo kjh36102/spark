@@ -1,3 +1,10 @@
 #DO NOT NEVER EVER REMOVE THIS LINE BELOW.
 spark/ftp_info.yml
 
+
+#Add image extensions that you don't want to push
+*.png
+*.jpg
+*.gif
+*.bmp
+*.webp

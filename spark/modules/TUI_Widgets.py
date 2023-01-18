@@ -40,9 +40,10 @@ class InputContainer(Container):
         )
         
     class Submitted(Message):
-        def __init__(self, sender: MessageTarget, value) -> None:
+        def __init__(self, sender: MessageTarget, request, value) -> None:
             super().__init__(sender)
             self.value = value
+            self.request = request
             
     class Aborted(Message):
         def __init__(self, sender: MessageTarget) -> None:
@@ -98,10 +99,10 @@ class InputContainer(Container):
         if self.current_request.essential:
             if self.input_box.value == '': return
         else:
-            if self.current_request.default != None:
+            if self.current_request.default != None and self.input_box.value == '':
                 self.input_box.value = self.current_request.default
         
-        await self.emit(self.Submitted(self, self.input_box.value))
+        await self.emit(self.Submitted(self, self.current_request, self.input_box.value))
         
     async def action_abort_input(self):
         await self.emit(self.Aborted(self))

@@ -55,8 +55,6 @@ async def create_post(process:CustomProcess, app:TUIApp):
     #get category scene
     category_scene = ManageCategory.get_category_select_scene(prompt='Create Post')
 
-    app.print('After get category scene:', category_scene.items)
-
     #if there is no category
     if category_scene == None:
         app.alert("You haven't created any categories yet.")
@@ -227,7 +225,7 @@ async def delete_post(process:CustomProcess, app:TUIApp):
             
 
 async def move_post(process:CustomProcess, app:TUIApp):
-    category_scene = ManageCategory.get_category_select_scene('Move Post')
+    category_scene = ManageCategory.get_category_select_scene(prompt='Move Post', include_uncategorized=True)
     
     if category_scene == None: 
         app.alert('You have not created any categories yet.', 'Error')

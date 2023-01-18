@@ -2,10 +2,8 @@ import sys
 sys.path.append('./spark/modules/')
 sys.path.append('./spark/modules/pages/')
 
-from TUI import *
-from TUI_DAO import *
-from TUI_Widgets import CheckableListItem
-
+from TUI import CustomProcess, TUIApp
+from TUI_DAO import Scene, InputRequest, get_func_names
 
 class MyCustomProcess(CustomProcess):
     def __init__(self, app: 'TUIApp') -> None:
