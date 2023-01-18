@@ -386,6 +386,11 @@ async def decompile_post(process:CustomProcess, app:TUIApp):
     app.alert(f'Compiling {loading_max} posts in category {selected_category} all done.')
 
 async def sync_local_with_FTP(process:CustomProcess, app:TUIApp):
+    #ftp 정보 검사하기
+    if ConfigFTPInfo.load_ftp_info()['hostname'] == '':
+        app.alert('You must configure FTP server info before you can use this feature.', 'Error')
+        return
+    
     app.open_logger(lock=True)
     app.print_bar()
 

@@ -209,7 +209,7 @@ async def delete_category(process:CustomProcess, app:TUIApp):
             shutil.move(src_path, dest_path)
         
         #남아있는 폴더 지우기
-        os.remove(f'./_posts/{category_name}')
+        os.removedirs(f'./_posts/{category_name}')
             
         app.hide_loading()
         app.close_logger()

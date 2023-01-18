@@ -154,7 +154,7 @@ def load_ftp_info():
 
     #return empty string if file not exist
     if not os.path.isfile(file_path):
-        return 
+        return empty_ret
     else:
         f = open(file_path, 'r', encoding='utf-8')
         raw_info = f.read()
