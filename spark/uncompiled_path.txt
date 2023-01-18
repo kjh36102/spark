@@ -1,3 +1,4 @@
 ./_posts/animals/dogs/dogs.md
 ./_posts/animals/dogs/dogs.md
 ./_posts/animals/cats/cats.md
+./_posts/animals/dog/dog.md
