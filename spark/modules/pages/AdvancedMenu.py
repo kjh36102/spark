@@ -362,7 +362,7 @@ async def decompile_post(process:CustomProcess, app:TUIApp):
         #기존 파일에서 이미지 주소 변환
         app.print('  Converting local url to embeded url...')
         raw_f = raw_f.replace(f'title: {post_name}', f'title: {new_post_name}', 1)
-        raw_f = compiled_re.sub(f'![\\1](./\\2)', raw_f)
+        raw_f = compiled_re.sub(f'![\\1](\\2)', raw_f)
 
         #기존 포스팅 제거
         app.print('  Removing original post...')
