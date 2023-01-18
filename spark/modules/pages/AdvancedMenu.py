@@ -330,10 +330,6 @@ async def decompile_post(process:CustomProcess, app:TUIApp):
     compiled_list = await process.request_select(post_scene)
     compiled_list = compiled_list.items()
 
-    #ftp 정보에서 imgbaseurl 가져오기
-    ftp_info = ConfigFTPInfo.load_ftp_info()
-    imgbaseurl = ftp_info['imgbaseurl']
-
     #정규식 객체 컴파일
     compiled_re = re.compile(r'\!\[(.*)\]\([http].*\/(.*)\)')
 
