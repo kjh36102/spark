@@ -503,7 +503,7 @@ async def compile_and_push(process:CustomProcess, app:TUIApp):
     
     #정규식 객체 컴파일
     compiled_compile_re = re.compile(r'\d{4}-\d{2}-\d{2}-.*')
-    compiled_url_re = re.compile(r'\!\[(.*)\]\([http].*\/(.*)\)')
+    compiled_url_re = re.compile(r'\!\[(.*)\]\(([^http].*)\)')
     
     #ftp 정보에서 imgbaseurl 가져오기
     ftp_info = ConfigFTPInfo.load_ftp_info()
