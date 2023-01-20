@@ -12,3 +12,5 @@
 ./_posts/cats/cat2/cat2.md
 ./_posts/dogs/dog1/dog1.md
 ./_posts/dogs/dog2/dog2.md
+./_posts/animals/test1/test1.md
+./_posts/animals/test2/test2.md

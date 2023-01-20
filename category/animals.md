@@ -1,4 +1,4 @@
 ---
 layout: category
-title: dogs
+title: animals
 ---
