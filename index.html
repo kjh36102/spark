@@ -34,7 +34,9 @@ layout: default
 </header>
 
 <script>
-  if (location.protocol === 'https:') {
-    location.replace(`http:${location.href.substring(location.protocol.length)}`);
-  }
+  addEventListener("load", (event) => {
+    if (location.protocol === 'https:') {
+      location.replace(`http:${location.href.substring(location.protocol.length)}`);
+    }
+  });
 </script>
